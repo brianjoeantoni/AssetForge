@@ -16,8 +16,10 @@ import {
   listLocalGenerations,
   type Asset,
   type Generation,
-  type User
+  type User,
 } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { getApiHealth } from "@/lib/server-api";
 
 function DashboardContent({ user }: { user: User }) {
   const [prompt, setPrompt] = useState("");
@@ -47,12 +49,32 @@ function DashboardContent({ user }: { user: User }) {
     }
   }
 
+  const apiHealthQuery = useQuery({
+    queryKey: ["api-health"],
+    queryFn: getApiHealth,
+  });
+
   return (
     <div className="space-y-6">
+      <div className="rounded-lg border bg-white p-4 text-sm">
+        API:{" "}
+        {apiHealthQuery.isLoading ? (
+          <span className="text-muted-foreground">checking</span>
+        ) : apiHealthQuery.isError ? (
+          <span className="text-red-700">offline</span>
+        ) : (
+          <span className="text-emerald-700">
+            online ({apiHealthQuery.data?.service ?? "unknown"})
+          </span>
+        )}
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>Generate Asset</CardTitle>
-          <p className="text-sm text-muted-foreground">Describe the image asset you want to mock in the browser.</p>
+          <p className="text-sm text-muted-foreground">
+            Describe the image asset you want to mock in the browser.
+          </p>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={submit}>
@@ -63,7 +85,11 @@ function DashboardContent({ user }: { user: User }) {
               required
               minLength={5}
             />
-            {error ? <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
+            {error ? (
+              <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                {error}
+              </p>
+            ) : null}
             <Button type="submit">
               <WandSparkles className="h-4 w-4" />
               Generate
@@ -74,19 +100,30 @@ function DashboardContent({ user }: { user: User }) {
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-normal">Recent Generations</h2>
-          <span className="text-sm text-muted-foreground">{generations.length} total</span>
+          <h2 className="text-lg font-semibold tracking-normal">
+            Recent Generations
+          </h2>
+          <span className="text-sm text-muted-foreground">
+            {generations.length} total
+          </span>
         </div>
         <div className="grid gap-3 md:grid-cols-3">
           {generations.map((generation) => (
             <div key={generation.id} className="rounded-lg border bg-white p-4">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <StatusBadge status={generation.status} />
-                <span className="text-xs text-muted-foreground">{new Date(generation.createdAt).toLocaleString()}</span>
+                <span className="text-xs text-muted-foreground">
+                  {new Date(generation.createdAt).toLocaleString()}
+                </span>
               </div>
-              <p className="line-clamp-3 min-h-16 text-sm">{generation.prompt}</p>
+              <p className="line-clamp-3 min-h-16 text-sm">
+                {generation.prompt}
+              </p>
               {generation.assetId && generation.status === "COMPLETED" ? (
-                <Link className="mt-4 inline-flex text-sm font-medium text-primary" href={`/assets/${generation.assetId}`}>
+                <Link
+                  className="mt-4 inline-flex text-sm font-medium text-primary"
+                  href={`/assets/${generation.assetId}`}
+                >
                   View asset
                 </Link>
               ) : null}
@@ -103,15 +140,27 @@ function DashboardContent({ user }: { user: User }) {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold tracking-normal">Assets</h2>
-          <span className="text-sm text-muted-foreground">{assets.length} completed</span>
+          <span className="text-sm text-muted-foreground">
+            {assets.length} completed
+          </span>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {assets.map((asset) => (
-            <Link key={asset.id} href={`/assets/${asset.id}`} className="overflow-hidden rounded-lg border bg-white">
-              <img className="aspect-video w-full object-cover" src={assetImageUrl(asset.imageUrl)} alt={asset.name} />
+            <Link
+              key={asset.id}
+              href={`/assets/${asset.id}`}
+              className="overflow-hidden rounded-lg border bg-white"
+            >
+              <img
+                className="aspect-video w-full object-cover"
+                src={assetImageUrl(asset.imageUrl)}
+                alt={asset.name}
+              />
               <div className="space-y-1 p-4">
                 <h3 className="truncate font-medium">{asset.name}</h3>
-                <p className="line-clamp-2 text-sm text-muted-foreground">{asset.prompt}</p>
+                <p className="line-clamp-2 text-sm text-muted-foreground">
+                  {asset.prompt}
+                </p>
               </div>
             </Link>
           ))}

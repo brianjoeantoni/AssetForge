@@ -6,11 +6,12 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "npm run dev -w @assetforge/web",
+    "dev": "concurrently -n api,web -c cyan,green \"npm run dev -w @assetforge/api\" \"npm run dev -w @assetforge/web\"",
     "build": "npm run build -w @assetforge/web",
     "typecheck": "npm run typecheck -w @assetforge/web"
   },
   "devDependencies": {
+    "concurrently": "^10.0.5",
     "typescript": "latest"
   }
 }
