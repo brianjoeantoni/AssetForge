@@ -1,0 +1,63 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum GenerationStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model User {
+  id           String       @id @default(uuid())
+  name         String
+  email        String       @unique
+  passwordHash String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  assets       Asset[]
+  generations  Generation[]
+
+  @@map("users")
+}
+
+model Generation {
+  id          String           @id @default(uuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assetId     String?          @unique
+  prompt      String
+  status      GenerationStatus @default(QUEUED)
+  model       String           @default("FakeImageGen-v1")
+  error       String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  completedAt DateTime?
+
+  @@index([userId, createdAt])
+  @@map("generations")
+}
+
+model Asset {
+  id           String           @id @default(uuid())
+  ownerId      String
+  owner        User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  generationId String?          @unique
+  name         String
+  prompt       String
+  status       GenerationStatus @default(COMPLETED)
+  imageUrl     String
+  model        String           @default("FakeImageGen-v1")
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([ownerId, createdAt])
+  @@map("assets")
+}

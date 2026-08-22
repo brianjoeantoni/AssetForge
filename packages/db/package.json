@@ -1,0 +1,25 @@
+{
+  "name": "@assetforge/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev --name init",
+    "db:deploy": "prisma migrate deploy",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.14.0",
+    "mongoose": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "prisma": "^6.14.0",
+    "typescript": "latest"
+  }
+}

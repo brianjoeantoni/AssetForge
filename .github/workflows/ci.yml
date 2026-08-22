@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: assetforge
+          POSTGRES_PASSWORD: assetforge
+          POSTGRES_DB: assetforge_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U assetforge -d assetforge_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+    env:
+      DATABASE_URL: postgresql://assetforge:assetforge@localhost:5432/assetforge_test?schema=public
+      MONGODB_URL: mongodb://localhost:27017/assetforge_test
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-secret-for-tests
+      WEB_ORIGIN: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run db:deploy
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build

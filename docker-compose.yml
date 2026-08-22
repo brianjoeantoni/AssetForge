@@ -1,0 +1,96 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: assetforge
+      POSTGRES_PASSWORD: assetforge
+      POSTGRES_DB: assetforge
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U assetforge -d assetforge"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://assetforge:assetforge@postgres:5432/assetforge?schema=public
+      MONGODB_URL: mongodb://mongo:27017/assetforge
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: replace-me-with-a-long-random-secret
+      API_PORT: 4000
+      WEB_ORIGIN: http://localhost:3000
+    ports:
+      - "4000:4000"
+    volumes:
+      - asset-uploads:/app/apps/api/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://assetforge:assetforge@postgres:5432/assetforge?schema=public
+      MONGODB_URL: mongodb://mongo:27017/assetforge
+      REDIS_URL: redis://redis:6379
+      API_PUBLIC_URL: http://localhost:4000
+    volumes:
+      - asset-uploads:/app/apps/api/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  postgres-data:
+  mongo-data:
+  asset-uploads:
