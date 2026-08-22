@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiFetch, type User } from "@/lib/api";
+import { getCurrentUser, type User } from "@/lib/api";
 
 type AuthGateState =
   | { status: "loading"; user?: undefined }
@@ -14,22 +14,15 @@ export function AuthGate({ children }: { children: (user: User) => React.ReactNo
   const [state, setState] = useState<AuthGateState>({ status: "loading" });
 
   useEffect(() => {
-    let mounted = true;
+    const user = getCurrentUser();
 
-    apiFetch<{ user: User }>("/auth/me")
-      .then((response) => {
-        if (mounted) setState({ status: "ready", user: response.user });
-      })
-      .catch(() => {
-        if (mounted) {
-          setState({ status: "error" });
-          router.push("/login");
-        }
-      });
+    if (!user) {
+      setState({ status: "error" });
+      router.push("/login");
+      return;
+    }
 
-    return () => {
-      mounted = false;
-    };
+    setState({ status: "ready", user });
   }, [router]);
 
   if (state.status === "loading") {

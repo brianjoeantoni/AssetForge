@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LogOut, UserCircle } from "lucide-react";
-import { apiFetch, type User } from "@/lib/api";
+import { logoutLocalUser, type User } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
 export function AppShell({ user, children }: { user: User; children: React.ReactNode }) {
   const router = useRouter();
 
-  async function logout() {
-    await apiFetch<void>("/auth/logout", { method: "POST" });
+  function logout() {
+    logoutLocalUser();
     router.push("/login");
   }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { WandSparkles } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AuthGate } from "@/components/AuthGate";
@@ -9,57 +9,41 @@ import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { apiFetch, assetImageUrl, type Asset, type Generation } from "@/lib/api";
+import {
+  assetImageUrl,
+  createLocalGeneration,
+  listLocalAssets,
+  listLocalGenerations,
+  type Asset,
+  type Generation,
+  type User
+} from "@/lib/api";
 
-function DashboardContent() {
+function DashboardContent({ user }: { user: User }) {
   const [prompt, setPrompt] = useState("");
   const [generations, setGenerations] = useState<Generation[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  const hasActiveGeneration = useMemo(
-    () => generations.some((generation) => generation.status === "QUEUED" || generation.status === "PROCESSING"),
-    [generations]
-  );
-
-  async function loadData() {
-    const [generationResponse, assetResponse] = await Promise.all([
-      apiFetch<{ generations: Generation[] }>("/generations"),
-      apiFetch<{ assets: Asset[] }>("/assets")
-    ]);
-    setGenerations(generationResponse.generations);
-    setAssets(assetResponse.assets);
+  function loadData() {
+    setGenerations(listLocalGenerations(user.id));
+    setAssets(listLocalAssets(user.id));
   }
 
   useEffect(() => {
-    void loadData().catch((loadError) => setError((loadError as Error).message));
-  }, []);
+    loadData();
+  }, [user.id]);
 
-  useEffect(() => {
-    if (!hasActiveGeneration) return;
-    const timer = window.setInterval(() => {
-      void loadData().catch((loadError) => setError((loadError as Error).message));
-    }, 2000);
-    return () => window.clearInterval(timer);
-  }, [hasActiveGeneration]);
-
-  async function submit(event: FormEvent) {
+  function submit(event: FormEvent) {
     event.preventDefault();
     setError("");
-    setLoading(true);
 
     try {
-      await apiFetch<{ generation: Generation }>("/generations", {
-        method: "POST",
-        body: JSON.stringify({ prompt })
-      });
+      createLocalGeneration(user.id, prompt);
       setPrompt("");
-      await loadData();
+      loadData();
     } catch (generationError) {
       setError((generationError as Error).message);
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -68,7 +52,7 @@ function DashboardContent() {
       <Card>
         <CardHeader>
           <CardTitle>Generate Asset</CardTitle>
-          <p className="text-sm text-muted-foreground">Describe the image asset you want the background worker to create.</p>
+          <p className="text-sm text-muted-foreground">Describe the image asset you want to mock in the browser.</p>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={submit}>
@@ -80,9 +64,9 @@ function DashboardContent() {
               minLength={5}
             />
             {error ? <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
-            <Button type="submit" disabled={loading}>
+            <Button type="submit">
               <WandSparkles className="h-4 w-4" />
-              {loading ? "Queueing..." : "Generate"}
+              Generate
             </Button>
           </form>
         </CardContent>
@@ -147,7 +131,7 @@ export default function DashboardPage() {
     <AuthGate>
       {(user) => (
         <AppShell user={user}>
-          <DashboardContent />
+          <DashboardContent user={user} />
         </AppShell>
       )}
     </AuthGate>

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { UserPlus } from "lucide-react";
-import { apiFetch, type User } from "@/lib/api";
+import { registerLocalUser } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,9 +16,8 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  async function submit(event: FormEvent) {
+  function submit(event: FormEvent) {
     event.preventDefault();
     setError("");
 
@@ -27,18 +26,11 @@ export default function RegisterPage() {
       return;
     }
 
-    setLoading(true);
-
     try {
-      await apiFetch<{ user: User }>("/auth/register", {
-        method: "POST",
-        body: JSON.stringify({ name, email, password })
-      });
+      registerLocalUser({ name, email });
       router.push("/dashboard");
     } catch (registerError) {
       setError((registerError as Error).message);
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -80,9 +72,9 @@ export default function RegisterPage() {
               />
             </label>
             {error ? <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
-            <Button className="w-full" type="submit" disabled={loading}>
+            <Button className="w-full" type="submit">
               <UserPlus className="h-4 w-4" />
-              {loading ? "Creating..." : "Create Account"}
+              Create Account
             </Button>
           </form>
           <p className="mt-5 text-center text-sm text-muted-foreground">

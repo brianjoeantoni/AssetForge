@@ -10,52 +10,51 @@ import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { apiFetch, assetImageUrl, type Asset } from "@/lib/api";
+import { assetImageUrl, deleteLocalAsset, getLocalAsset, renameLocalAsset, type Asset, type User } from "@/lib/api";
 
-function AssetDetailContent() {
+function AssetDetailContent({ user }: { user: User }) {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const [asset, setAsset] = useState<Asset | null>(null);
-  const [metadata, setMetadata] = useState<unknown>(null);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    apiFetch<{ asset: Asset; metadata: unknown }>(`/assets/${params.id}`)
-      .then((response) => {
-        setAsset(response.asset);
-        setMetadata(response.metadata);
-        setName(response.asset.name);
-      })
-      .catch((loadError) => setError((loadError as Error).message));
-  }, [params.id]);
+    const localAsset = getLocalAsset(user.id, params.id);
 
-  async function rename(event: FormEvent) {
+    if (!localAsset) {
+      setError("Asset not found");
+      return;
+    }
+
+    setAsset(localAsset);
+    setName(localAsset.name);
+  }, [params.id, user.id]);
+
+  function rename(event: FormEvent) {
     event.preventDefault();
     if (!asset) return;
-    setSaving(true);
     setError("");
 
     try {
-      const response = await apiFetch<{ asset: Asset }>(`/assets/${asset.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name })
-      });
-      setAsset(response.asset);
+      const updated = renameLocalAsset(user.id, asset.id, name);
+      if (!updated) {
+        setError("Asset not found");
+        return;
+      }
+
+      setAsset(updated);
     } catch (renameError) {
       setError((renameError as Error).message);
-    } finally {
-      setSaving(false);
     }
   }
 
-  async function deleteAsset() {
+  function deleteAsset() {
     if (!asset) return;
     setError("");
 
     try {
-      await apiFetch<void>(`/assets/${asset.id}`, { method: "DELETE" });
+      deleteLocalAsset(user.id, asset.id);
       router.push("/dashboard");
     } catch (deleteError) {
       setError((deleteError as Error).message);
@@ -101,9 +100,9 @@ function AssetDetailContent() {
                   <span>Name</span>
                   <Input value={name} onChange={(event) => setName(event.target.value)} required />
                 </label>
-                <Button type="submit" disabled={saving}>
+                <Button type="submit">
                   <Save className="h-4 w-4" />
-                  {saving ? "Saving..." : "Save"}
+                  Save
                 </Button>
               </form>
               {error ? <p className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
@@ -144,7 +143,7 @@ function AssetDetailContent() {
             </CardHeader>
             <CardContent>
               <pre className="max-h-72 overflow-auto rounded-md bg-muted p-3 text-xs">
-                {JSON.stringify(metadata ?? { note: "No metadata recorded" }, null, 2)}
+                {JSON.stringify({ note: "Frontend-only branch: no backend metadata yet." }, null, 2)}
               </pre>
             </CardContent>
           </Card>
@@ -164,7 +163,7 @@ export default function AssetDetailPage() {
     <AuthGate>
       {(user) => (
         <AppShell user={user}>
-          <AssetDetailContent />
+          <AssetDetailContent user={user} />
         </AppShell>
       )}
     </AuthGate>
