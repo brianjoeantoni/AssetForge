@@ -2,23 +2,82 @@
 
 import Link from "next/link";
 import { isAxiosError } from "axios";
-import { useParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
+import { FormEvent, useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Save, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AuthGate } from "@/components/AuthGate";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getAsset, type ApiUser } from "@/lib/server-api";
+import { Input } from "@/components/ui/input";
+import {
+  deleteAsset,
+  getAsset,
+  updateAsset,
+  type ApiUser,
+} from "@/lib/server-api";
 
 function AssetDetailContent({ user }: { user: ApiUser }) {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [name, setName] = useState("");
+  const [actionError, setActionError] = useState("");
 
   const assetQuery = useQuery({
     queryKey: ["assets", params.id],
     queryFn: () => getAsset(params.id),
     retry: false,
   });
+
+  useEffect(() => {
+    if (assetQuery.data) {
+      setName(assetQuery.data.name);
+    }
+  }, [assetQuery.data]);
+
+  function errorMessage(error: unknown, fallback: string) {
+    if (isAxiosError<{ error?: string }>(error)) {
+      return error.response?.data.error ?? fallback;
+    }
+
+    return fallback;
+  }
+
+  const updateAssetMutation = useMutation({
+    mutationFn: updateAsset,
+    onSuccess: (updatedAsset) => {
+      setActionError("");
+      queryClient.setQueryData(["assets", params.id], updatedAsset);
+      queryClient.invalidateQueries({ queryKey: ["assets"] });
+    },
+    onError: (updateError) => {
+      setActionError(errorMessage(updateError, "Failed to update asset"));
+    },
+  });
+
+  const deleteAssetMutation = useMutation({
+    mutationFn: deleteAsset,
+    onSuccess: () => {
+      setActionError("");
+      queryClient.invalidateQueries({ queryKey: ["assets"] });
+      router.push("/dashboard");
+    },
+    onError: (deleteError) => {
+      setActionError(errorMessage(deleteError, "Failed to delete asset"));
+    },
+  });
+
+  function renameAsset(event: FormEvent) {
+    event.preventDefault();
+    setActionError("");
+
+    updateAssetMutation.mutate({
+      id: params.id,
+      name,
+    });
+  }
 
   if (assetQuery.isLoading) {
     return (
@@ -89,7 +148,28 @@ function AssetDetailContent({ user }: { user: ApiUser }) {
             <CardHeader>
               <CardTitle>{asset.name}</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              <form className="space-y-3" onSubmit={renameAsset}>
+                <label className="block space-y-1 text-sm font-medium">
+                  <span>Name</span>
+                  <Input
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    required
+                  />
+                </label>
+                <Button type="submit" disabled={updateAssetMutation.isPending}>
+                  <Save className="h-4 w-4" />
+                  {updateAssetMutation.isPending ? "Saving..." : "Save"}
+                </Button>
+              </form>
+
+              {actionError ? (
+                <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  {actionError}
+                </p>
+              ) : null}
+
               <dl className="space-y-3 text-sm">
                 <div className="flex items-center justify-between gap-3">
                   <dt className="text-muted-foreground">Status</dt>
@@ -132,9 +212,23 @@ function AssetDetailContent({ user }: { user: ApiUser }) {
             </CardContent>
           </Card>
 
-          <Link className="inline-flex" href="/dashboard">
-            <Button variant="outline">Back to dashboard</Button>
-          </Link>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Link className="block" href="/dashboard">
+              <Button className="w-full" variant="outline">
+                Back to dashboard
+              </Button>
+            </Link>
+
+            <Button
+              className="w-full"
+              variant="destructive"
+              onClick={() => deleteAssetMutation.mutate(asset.id)}
+              disabled={deleteAssetMutation.isPending}
+            >
+              <Trash2 className="h-4 w-4" />
+              {deleteAssetMutation.isPending ? "Deleting..." : "Delete Asset"}
+            </Button>
+          </div>
         </aside>
       </div>
     </div>

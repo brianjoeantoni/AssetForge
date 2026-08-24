@@ -33,6 +33,11 @@ export type CreateAssetInput = {
   prompt: string;
 };
 
+export type UpdateAssetInput = {
+  id: string;
+  name: string;
+};
+
 export type RegisterInput = {
   name: string;
   email: string;
@@ -78,6 +83,17 @@ export async function getAsset(id: string) {
 export async function createAsset(input: CreateAssetInput) {
   const { data } = await api.post<ApiAsset>("/assets", input);
   return data;
+}
+
+export async function updateAsset(input: UpdateAssetInput) {
+  const { data } = await api.patch<ApiAsset>(`/assets/${input.id}`, {
+    name: input.name,
+  });
+  return data;
+}
+
+export async function deleteAsset(id: string) {
+  await api.delete(`/assets/${id}`);
 }
 
 export async function register(input: RegisterInput) {

@@ -517,6 +517,87 @@ app.get("/assets/:id", requireAuth, async (req, res) => {
   }
 });
 
+app.patch("/assets/:id", requireAuth, async (req, res) => {
+  const { userId } = req as AuthenticatedRequest;
+  const { id } = req.params;
+  const { name } = req.body;
+
+  if (typeof id !== "string" || !isUuid(id)) {
+    res.status(400).json({
+      error: "Invalid asset id",
+    });
+    return;
+  }
+
+  if (typeof name !== "string" || name.trim() === "") {
+    res.status(400).json({
+      error: "Name is required",
+    });
+    return;
+  }
+
+  try {
+    const result = await db.query(
+      `
+        UPDATE assets
+        SET name = $1, updated_at = NOW()
+        WHERE id = $2 AND owner_id = $3
+        RETURNING id, owner_id, name, prompt, status, image_url, model, created_at, updated_at
+      `,
+      [name.trim(), id, userId],
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({
+        error: "Asset not found",
+      });
+      return;
+    }
+
+    res.json(result.rows[0]);
+  } catch {
+    res.status(500).json({
+      error: "Failed to update asset",
+    });
+  }
+});
+
+app.delete("/assets/:id", requireAuth, async (req, res) => {
+  const { userId } = req as AuthenticatedRequest;
+  const { id } = req.params;
+
+  if (typeof id !== "string" || !isUuid(id)) {
+    res.status(400).json({
+      error: "Invalid asset id",
+    });
+    return;
+  }
+
+  try {
+    const result = await db.query(
+      `
+        DELETE FROM assets
+        WHERE id = $1 AND owner_id = $2
+        RETURNING id
+      `,
+      [id, userId],
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({
+        error: "Asset not found",
+      });
+      return;
+    }
+
+    res.status(204).send();
+  } catch {
+    res.status(500).json({
+      error: "Failed to delete asset",
+    });
+  }
+});
+
 app.post("/assets", requireAuth, async (req, res) => {
   const { userId } = req as AuthenticatedRequest;
   const { prompt } = req.body;
@@ -555,6 +636,87 @@ app.post("/assets", requireAuth, async (req, res) => {
   } catch {
     res.status(500).json({
       error: "Failed to create asset",
+    });
+  }
+});
+
+app.patch("/assets/:id", requireAuth, async (req, res) => {
+  const { userId } = req as AuthenticatedRequest;
+  const { id } = req.params;
+  const { name } = req.body;
+
+  if (typeof id !== "string" || !isUuid(id)) {
+    res.status(400).json({
+      error: "Invalid asset id",
+    });
+    return;
+  }
+
+  if (typeof name !== "string" || name.trim() === "") {
+    res.status(400).json({
+      error: "Name is required",
+    });
+    return;
+  }
+
+  try {
+    const result = await db.query(
+      `
+        UPDATE assets
+        SET name = $1, updated_at = NOW()
+        WHERE id = $2 AND owner_id = $3
+        RETURNING id, owner_id, name, prompt, status, image_url, model, created_at, updated_at
+      `,
+      [name.trim(), id, userId],
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({
+        error: "Asset not found",
+      });
+      return;
+    }
+
+    res.json(result.rows[0]);
+  } catch {
+    res.status(500).json({
+      error: "Failed to update asset",
+    });
+  }
+});
+
+app.delete("/assets/:id", requireAuth, async (req, res) => {
+  const { userId } = req as AuthenticatedRequest;
+  const { id } = req.params;
+
+  if (typeof id !== "string" || !isUuid(id)) {
+    res.status(400).json({
+      error: "Invalid asset id",
+    });
+    return;
+  }
+
+  try {
+    const result = await db.query(
+      `
+        DELETE FROM assets
+        WHERE id = $1 AND owner_id = $2
+        RETURNING id
+      `,
+      [id, userId],
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({
+        error: "Asset not found",
+      });
+      return;
+    }
+
+    res.status(204).send();
+  } catch {
+    res.status(500).json({
+      error: "Failed to delete asset",
     });
   }
 });
