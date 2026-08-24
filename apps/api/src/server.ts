@@ -147,6 +147,13 @@ app.patch("/users/:id", async (req, res) => {
 app.delete("/users/:id", async (req, res) => {
   const { id } = req.params;
 
+  if (!isUuid(id)) {
+    res.status(400).json({
+      error: "Invalid user id",
+    });
+    return;
+  }
+
   try {
     const result = await db.query(
       `
