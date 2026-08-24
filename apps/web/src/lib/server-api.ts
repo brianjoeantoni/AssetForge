@@ -12,9 +12,25 @@ export type ApiUser = {
   created_at: string;
 };
 
+export type ApiAsset = {
+  id: string;
+  owner_id: string;
+  name: string;
+  prompt: string;
+  status: string;
+  image_url: string;
+  model: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type CreateUserInput = {
   name: string;
   email: string;
+};
+
+export type CreateAssetInput = {
+  prompt: string;
 };
 
 export type RegisterInput = {
@@ -46,6 +62,21 @@ export async function getUsers() {
 
 export async function createUser(input: CreateUserInput) {
   const { data } = await api.post<ApiUser>("/users", input);
+  return data;
+}
+
+export async function getAssets() {
+  const { data } = await api.get<ApiAsset[]>("/assets");
+  return data;
+}
+
+export async function getAsset(id: string) {
+  const { data } = await api.get<ApiAsset>(`/assets/${id}`);
+  return data;
+}
+
+export async function createAsset(input: CreateAssetInput) {
+  const { data } = await api.post<ApiAsset>("/assets", input);
   return data;
 }
 

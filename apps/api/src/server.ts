@@ -92,7 +92,7 @@ app.get("/db-health", async (_req, res) => {
   });
 });
 
-app.get("/users", async (_req, res) => {
+app.get("/users", requireAuth, async (_req, res) => {
   const result = await db.query(
     "SELECT id, name, email, created_at FROM users ORDER BY created_at DESC",
   );
@@ -100,10 +100,10 @@ app.get("/users", async (_req, res) => {
   res.json(result.rows);
 });
 
-app.get("/users/:id", async (req, res) => {
+app.get("/users/:id", requireAuth, async (req, res) => {
   const { id } = req.params;
 
-  if (!isUuid(id)) {
+  if (typeof id !== "string" || !isUuid(id)) {
     res.status(400).json({
       error: "Invalid user id",
     });
@@ -135,11 +135,11 @@ app.get("/users/:id", async (req, res) => {
   }
 });
 
-app.patch("/users/:id", async (req, res) => {
+app.patch("/users/:id", requireAuth, async (req, res) => {
   const { id } = req.params;
   const { name, email } = req.body;
 
-  if (!isUuid(id)) {
+  if (typeof id !== "string" || !isUuid(id)) {
     res.status(400).json({
       error: "Invalid user id",
     });
@@ -198,10 +198,10 @@ app.patch("/users/:id", async (req, res) => {
   }
 });
 
-app.delete("/users/:id", async (req, res) => {
+app.delete("/users/:id", requireAuth, async (req, res) => {
   const { id } = req.params;
 
-  if (!isUuid(id)) {
+  if (typeof id !== "string" || !isUuid(id)) {
     res.status(400).json({
       error: "Invalid user id",
     });
@@ -234,7 +234,7 @@ app.delete("/users/:id", async (req, res) => {
 });
 
 // unused for now
-app.post("/users", async (req, res) => {
+app.post("/users", requireAuth, async (req, res) => {
   const { name, email } = req.body;
 
   if (typeof name !== "string" || name.trim() === "") {
@@ -457,6 +457,106 @@ app.post("/auth/logout", (_req, res) => {
   });
 
   res.status(204).send();
+});
+
+app.get("/assets", requireAuth, async (req, res) => {
+  const { userId } = req as AuthenticatedRequest;
+
+  try {
+    const result = await db.query(
+      `
+        SELECT id, owner_id, name, prompt, status, image_url, model, created_at, updated_at
+        FROM assets
+        WHERE owner_id = $1
+        ORDER BY created_at DESC
+      `,
+      [userId],
+    );
+
+    res.json(result.rows);
+  } catch {
+    res.status(500).json({
+      error: "Failed to fetch assets",
+    });
+  }
+});
+
+app.get("/assets/:id", requireAuth, async (req, res) => {
+  const { userId } = req as AuthenticatedRequest;
+  const { id } = req.params;
+
+  if (typeof id !== "string" || !isUuid(id)) {
+    res.status(400).json({
+      error: "Invalid asset id",
+    });
+    return;
+  }
+
+  try {
+    const result = await db.query(
+      `
+        SELECT id, owner_id, name, prompt, status, image_url, model, created_at, updated_at
+        FROM assets
+        WHERE id = $1 AND owner_id = $2
+      `,
+      [id, userId],
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({
+        error: "Asset not found",
+      });
+      return;
+    }
+
+    res.json(result.rows[0]);
+  } catch {
+    res.status(500).json({
+      error: "Failed to fetch asset",
+    });
+  }
+});
+
+app.post("/assets", requireAuth, async (req, res) => {
+  const { userId } = req as AuthenticatedRequest;
+  const { prompt } = req.body;
+
+  if (typeof prompt !== "string" || prompt.trim().length < 5) {
+    res.status(400).json({
+      error: "Prompt must be at least 5 characters",
+    });
+    return;
+  }
+
+  const cleanPrompt = prompt.trim();
+  const name = cleanPrompt
+    .replace(/[^\w\s-]/g, "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 5)
+    .map((word) => word[0]?.toUpperCase() + word.slice(1))
+    .join(" ");
+
+  const imageUrl = `https://placehold.co/960x540?text=${encodeURIComponent(
+    name || "Generated Asset",
+  )}`;
+
+  try {
+    const result = await db.query(
+      `
+        INSERT INTO assets (owner_id, name, prompt, image_url)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id, owner_id, name, prompt, status, image_url, model, created_at, updated_at
+      `,
+      [userId, name || "Generated Asset", cleanPrompt, imageUrl],
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch {
+    res.status(500).json({
+      error: "Failed to create asset",
+    });
+  }
 });
 
 app.listen(port, () => {

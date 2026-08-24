@@ -2,31 +2,24 @@
 
 import Link from "next/link";
 import { isAxiosError } from "axios";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import { Check, Pencil, Trash2, WandSparkles, X } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AuthGate } from "@/components/AuthGate";
-import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  assetImageUrl,
-  createLocalGeneration,
-  listLocalAssets,
-  listLocalGenerations,
-  type Asset,
-  type Generation,
-  type User,
-} from "@/lib/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  createAsset,
   createUser,
   deleteUser,
+  getAssets,
   getApiHealth,
   getUsers,
   updateUser,
+  type ApiAsset,
   type ApiUser,
 } from "@/lib/server-api";
 
@@ -36,10 +29,8 @@ type EditingUser = {
   email: string;
 };
 
-function DashboardContent({ user }: { user: User }) {
+function DashboardContent({ user }: { user: ApiUser }) {
   const [prompt, setPrompt] = useState("");
-  const [generations, setGenerations] = useState<Generation[]>([]);
-  const [assets, setAssets] = useState<Asset[]>([]);
   const [error, setError] = useState("");
 
   const [userName, setUserName] = useState("");
@@ -48,26 +39,13 @@ function DashboardContent({ user }: { user: User }) {
   const [editingUser, setEditingUser] = useState<EditingUser | null>(null);
   const [userActionError, setUserActionError] = useState("");
 
-  function loadData() {
-    setGenerations(listLocalGenerations(user.id));
-    setAssets(listLocalAssets(user.id));
-  }
-
-  useEffect(() => {
-    loadData();
-  }, [user.id]);
-
   function submit(event: FormEvent) {
     event.preventDefault();
     setError("");
 
-    try {
-      createLocalGeneration(user.id, prompt);
-      setPrompt("");
-      loadData();
-    } catch (generationError) {
-      setError((generationError as Error).message);
-    }
+    createAssetMutation.mutate({
+      prompt,
+    });
   }
 
   function submitUser(event: FormEvent) {
@@ -120,6 +98,11 @@ function DashboardContent({ user }: { user: User }) {
     queryFn: getUsers,
   });
 
+  const assetsQuery = useQuery({
+    queryKey: ["assets"],
+    queryFn: getAssets,
+  });
+
   const createUserMutation = useMutation({
     mutationFn: createUser,
     onSuccess: () => {
@@ -154,6 +137,18 @@ function DashboardContent({ user }: { user: User }) {
     },
     onError: (deleteError) => {
       setUserActionError(userErrorMessage(deleteError, "Failed to delete user"));
+    },
+  });
+
+  const createAssetMutation = useMutation({
+    mutationFn: createAsset,
+    onSuccess: () => {
+      setPrompt("");
+      setError("");
+      queryClient.invalidateQueries({ queryKey: ["assets"] });
+    },
+    onError: (assetError) => {
+      setError(userErrorMessage(assetError, "Failed to create asset"));
     },
   });
 
@@ -347,7 +342,7 @@ function DashboardContent({ user }: { user: User }) {
         <CardHeader>
           <CardTitle>Generate Asset</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Describe the image asset you want to mock in the browser.
+            Describe the image asset you want to create in PostgreSQL.
           </p>
         </CardHeader>
         <CardContent>
@@ -364,9 +359,9 @@ function DashboardContent({ user }: { user: User }) {
                 {error}
               </p>
             ) : null}
-            <Button type="submit">
+            <Button type="submit" disabled={createAssetMutation.isPending}>
               <WandSparkles className="h-4 w-4" />
-              Generate
+              {createAssetMutation.isPending ? "Generating..." : "Generate"}
             </Button>
           </form>
         </CardContent>
@@ -374,76 +369,47 @@ function DashboardContent({ user }: { user: User }) {
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-normal">
-            Recent Generations
-          </h2>
-          <span className="text-sm text-muted-foreground">
-            {generations.length} total
-          </span>
-        </div>
-        <div className="grid gap-3 md:grid-cols-3">
-          {generations.map((generation) => (
-            <div key={generation.id} className="rounded-lg border bg-white p-4">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <StatusBadge status={generation.status} />
-                <span className="text-xs text-muted-foreground">
-                  {new Date(generation.createdAt).toLocaleString()}
-                </span>
-              </div>
-              <p className="line-clamp-3 min-h-16 text-sm">
-                {generation.prompt}
-              </p>
-              {generation.assetId && generation.status === "COMPLETED" ? (
-                <Link
-                  className="mt-4 inline-flex text-sm font-medium text-primary"
-                  href={`/assets/${generation.assetId}`}
-                >
-                  View asset
-                </Link>
-              ) : null}
-            </div>
-          ))}
-          {generations.length === 0 ? (
-            <div className="rounded-lg border bg-white p-5 text-sm text-muted-foreground md:col-span-3">
-              No generations yet.
-            </div>
-          ) : null}
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold tracking-normal">Assets</h2>
           <span className="text-sm text-muted-foreground">
-            {assets.length} completed
+            {assetsQuery.data?.length ?? 0} total
           </span>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {assets.map((asset) => (
-            <Link
-              key={asset.id}
-              href={`/assets/${asset.id}`}
-              className="overflow-hidden rounded-lg border bg-white"
-            >
-              <img
-                className="aspect-video w-full object-cover"
-                src={assetImageUrl(asset.imageUrl)}
-                alt={asset.name}
-              />
-              <div className="space-y-1 p-4">
-                <h3 className="truncate font-medium">{asset.name}</h3>
-                <p className="line-clamp-2 text-sm text-muted-foreground">
-                  {asset.prompt}
-                </p>
+        {assetsQuery.isLoading ? (
+          <div className="rounded-lg border bg-white p-5 text-sm text-muted-foreground">
+            Loading assets...
+          </div>
+        ) : assetsQuery.isError ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-5 text-sm text-red-700">
+            Failed to load assets.
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {assetsQuery.data?.map((asset: ApiAsset) => (
+              <Link
+                key={asset.id}
+                href={`/assets/${asset.id}`}
+                className="overflow-hidden rounded-lg border bg-white"
+              >
+                <img
+                  className="aspect-video w-full object-cover"
+                  src={asset.image_url}
+                  alt={asset.name}
+                />
+                <div className="space-y-1 p-4">
+                  <h3 className="truncate font-medium">{asset.name}</h3>
+                  <p className="line-clamp-2 text-sm text-muted-foreground">
+                    {asset.prompt}
+                  </p>
+                </div>
+              </Link>
+            ))}
+            {assetsQuery.data?.length === 0 ? (
+              <div className="rounded-lg border bg-white p-5 text-sm text-muted-foreground sm:col-span-2 lg:col-span-3">
+                Completed assets will appear here.
               </div>
-            </Link>
-          ))}
-          {assets.length === 0 ? (
-            <div className="rounded-lg border bg-white p-5 text-sm text-muted-foreground sm:col-span-2 lg:col-span-3">
-              Completed assets will appear here.
-            </div>
-          ) : null}
-        </div>
+            ) : null}
+          </div>
+        )}
       </section>
     </div>
   );
