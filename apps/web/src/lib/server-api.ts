@@ -17,6 +17,17 @@ export type CreateUserInput = {
   email: string;
 };
 
+export type RegisterInput = {
+  name: string;
+  email: string;
+  password: string;
+};
+
+export type LoginInput = {
+  email: string;
+  password: string;
+};
+
 export type UpdateUserInput = {
   id: string;
   name: string;
@@ -36,6 +47,25 @@ export async function getUsers() {
 export async function createUser(input: CreateUserInput) {
   const { data } = await api.post<ApiUser>("/users", input);
   return data;
+}
+
+export async function register(input: RegisterInput) {
+  const { data } = await api.post<ApiUser>("/auth/register", input);
+  return data;
+}
+
+export async function login(input: LoginInput) {
+  const { data } = await api.post<ApiUser>("/auth/login", input);
+  return data;
+}
+
+export async function getCurrentUser() {
+  const { data } = await api.get<ApiUser>("/auth/me");
+  return data;
+}
+
+export async function logout() {
+  await api.post("/auth/logout");
 }
 
 export async function updateUser(input: UpdateUserInput) {

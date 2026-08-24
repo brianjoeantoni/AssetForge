@@ -2,17 +2,28 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { LogOut, UserCircle } from "lucide-react";
-import { logoutLocalUser, type User } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { logout, type ApiUser } from "@/lib/server-api";
 
-export function AppShell({ user, children }: { user: User; children: React.ReactNode }) {
+export function AppShell({
+  user,
+  children,
+}: {
+  user: ApiUser;
+  children: React.ReactNode;
+}) {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
-  function logout() {
-    logoutLocalUser();
-    router.push("/login");
-  }
+  const logoutMutation = useMutation({
+    mutationFn: logout,
+    onSettled: () => {
+      queryClient.removeQueries({ queryKey: ["auth", "me"] });
+      router.push("/login");
+    },
+  });
 
   return (
     <main className="min-h-screen bg-background">
@@ -26,7 +37,12 @@ export function AppShell({ user, children }: { user: User; children: React.React
               <UserCircle className="h-4 w-4" />
               <span>{user.name}</span>
             </div>
-            <Button variant="outline" size="sm" onClick={logout}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => logoutMutation.mutate()}
+              disabled={logoutMutation.isPending}
+            >
               <LogOut className="h-4 w-4" />
               Logout
             </Button>

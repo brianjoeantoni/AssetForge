@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { isAxiosError } from "axios";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useMutation } from "@tanstack/react-query";
 import { UserPlus } from "lucide-react";
-import { registerLocalUser } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { register } from "@/lib/server-api";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -16,6 +18,21 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+
+  const registerMutation = useMutation({
+    mutationFn: register,
+    onSuccess: () => {
+      router.push("/login");
+    },
+    onError: (registerError) => {
+      if (isAxiosError<{ error?: string }>(registerError)) {
+        setError(registerError.response?.data.error ?? "Failed to register");
+        return;
+      }
+
+      setError("Failed to register");
+    },
+  });
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -26,12 +43,11 @@ export default function RegisterPage() {
       return;
     }
 
-    try {
-      registerLocalUser({ name, email });
-      router.push("/dashboard");
-    } catch (registerError) {
-      setError((registerError as Error).message);
-    }
+    registerMutation.mutate({
+      name,
+      email,
+      password,
+    });
   }
 
   return (
@@ -72,9 +88,9 @@ export default function RegisterPage() {
               />
             </label>
             {error ? <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
-            <Button className="w-full" type="submit">
+            <Button className="w-full" type="submit" disabled={registerMutation.isPending}>
               <UserPlus className="h-4 w-4" />
-              Create Account
+              {registerMutation.isPending ? "Creating..." : "Create Account"}
             </Button>
           </form>
           <p className="mt-5 text-center text-sm text-muted-foreground">

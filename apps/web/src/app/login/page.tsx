@@ -1,30 +1,47 @@
 "use client";
 
 import Link from "next/link";
+import { isAxiosError } from "axios";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { LogIn } from "lucide-react";
-import { loginLocalUser } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { login } from "@/lib/server-api";
 
 export default function LoginPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+
+  const loginMutation = useMutation({
+    mutationFn: login,
+    onSuccess: (user) => {
+      queryClient.setQueryData(["auth", "me"], user);
+      router.push("/dashboard");
+    },
+    onError: (loginError) => {
+      if (isAxiosError<{ error?: string }>(loginError)) {
+        setError(loginError.response?.data.error ?? "Failed to login");
+        return;
+      }
+
+      setError("Failed to login");
+    },
+  });
 
   function submit(event: FormEvent) {
     event.preventDefault();
     setError("");
 
-    try {
-      loginLocalUser({ email });
-      router.push("/dashboard");
-    } catch (loginError) {
-      setError((loginError as Error).message);
-    }
+    loginMutation.mutate({
+      email,
+      password,
+    });
   }
 
   return (
@@ -45,9 +62,9 @@ export default function LoginPage() {
               <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
             </label>
             {error ? <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
-            <Button className="w-full" type="submit">
+            <Button className="w-full" type="submit" disabled={loginMutation.isPending}>
               <LogIn className="h-4 w-4" />
-              Login
+              {loginMutation.isPending ? "Logging in..." : "Login"}
             </Button>
           </form>
           <p className="mt-5 text-center text-sm text-muted-foreground">

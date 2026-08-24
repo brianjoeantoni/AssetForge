@@ -1,37 +1,39 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getCurrentUser, type User } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { getCurrentUser, type ApiUser } from "@/lib/server-api";
 
-type AuthGateState =
-  | { status: "loading"; user?: undefined }
-  | { status: "ready"; user: User }
-  | { status: "error"; user?: undefined };
-
-export function AuthGate({ children }: { children: (user: User) => React.ReactNode }) {
+export function AuthGate({
+  children,
+}: {
+  children: (user: ApiUser) => React.ReactNode;
+}) {
   const router = useRouter();
-  const [state, setState] = useState<AuthGateState>({ status: "loading" });
+  const currentUserQuery = useQuery({
+    queryKey: ["auth", "me"],
+    queryFn: getCurrentUser,
+    retry: false,
+  });
 
   useEffect(() => {
-    const user = getCurrentUser();
-
-    if (!user) {
-      setState({ status: "error" });
+    if (currentUserQuery.isError) {
       router.push("/login");
-      return;
     }
+  }, [currentUserQuery.isError, router]);
 
-    setState({ status: "ready", user });
-  }, [router]);
-
-  if (state.status === "loading") {
-    return <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">Loading...</div>;
+  if (currentUserQuery.isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+        Loading...
+      </div>
+    );
   }
 
-  if (state.status === "error") {
+  if (currentUserQuery.isError || !currentUserQuery.data) {
     return null;
   }
 
-  return <>{children(state.user)}</>;
+  return <>{children(currentUserQuery.data)}</>;
 }
