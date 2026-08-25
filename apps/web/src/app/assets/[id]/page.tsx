@@ -47,9 +47,9 @@ function AssetDetailContent({ user }: { user: ApiUser }) {
 
   const updateAssetMutation = useMutation({
     mutationFn: updateAsset,
-    onSuccess: (updatedAsset) => {
+    onSuccess: () => {
       setActionError("");
-      queryClient.setQueryData(["assets", params.id], updatedAsset);
+      queryClient.invalidateQueries({ queryKey: ["assets", params.id] });
       queryClient.invalidateQueries({ queryKey: ["assets"] });
     },
     onError: (updateError) => {

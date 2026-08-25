@@ -17,10 +17,9 @@ export async function createAsset(input: CreateAssetInput) {
 }
 
 export async function updateAsset(input: UpdateAssetInput) {
-  const { data } = await api.patch<ApiAsset>(`/assets/${input.id}`, {
+  await api.patch(`/assets/${input.id}`, {
     name: input.name,
   });
-  return data;
 }
 
 export async function deleteAsset(id: string) {

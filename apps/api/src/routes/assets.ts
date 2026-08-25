@@ -1,6 +1,6 @@
 import { Router, type Request } from "express";
-import { db } from "../db.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware.js";
+import { prisma } from "../prisma.js";
 import { fakeImageUrl, isUuid, titleFromPrompt } from "../utils.js";
 
 export const assetsRouter = Router();
@@ -15,17 +15,27 @@ assetsRouter.get("/", async (req, res) => {
   const { userId } = auth(req);
 
   try {
-    const result = await db.query(
-      `
-        SELECT id, owner_id, name, prompt, status, image_url, model, created_at, updated_at
-        FROM assets
-        WHERE owner_id = $1
-        ORDER BY created_at DESC
-      `,
-      [userId],
-    );
+    const assets = await prisma.assets.findMany({
+      where: {
+        owner_id: userId,
+      },
+      select: {
+        id: true,
+        owner_id: true,
+        name: true,
+        prompt: true,
+        status: true,
+        image_url: true,
+        model: true,
+        created_at: true,
+        updated_at: true,
+      },
+      orderBy: {
+        created_at: "desc",
+      },
+    });
 
-    res.json(result.rows);
+    res.json(assets);
   } catch {
     res.status(500).json({
       error: "Failed to fetch assets",
@@ -45,23 +55,32 @@ assetsRouter.get("/:id", async (req, res) => {
   }
 
   try {
-    const result = await db.query(
-      `
-        SELECT id, owner_id, name, prompt, status, image_url, model, created_at, updated_at
-        FROM assets
-        WHERE id = $1 AND owner_id = $2
-      `,
-      [id, userId],
-    );
+    const asset = await prisma.assets.findFirst({
+      where: {
+        id,
+        owner_id: userId,
+      },
+      select: {
+        id: true,
+        owner_id: true,
+        name: true,
+        prompt: true,
+        status: true,
+        image_url: true,
+        model: true,
+        created_at: true,
+        updated_at: true,
+      },
+    });
 
-    if (result.rows.length === 0) {
+    if (!asset) {
       res.status(404).json({
         error: "Asset not found",
       });
       return;
     }
 
-    res.json(result.rows[0]);
+    res.json(asset);
   } catch {
     res.status(500).json({
       error: "Failed to fetch asset",
@@ -84,16 +103,27 @@ assetsRouter.post("/", async (req, res) => {
   const name = titleFromPrompt(cleanPrompt);
 
   try {
-    const result = await db.query(
-      `
-        INSERT INTO assets (owner_id, name, prompt, image_url)
-        VALUES ($1, $2, $3, $4)
-        RETURNING id, owner_id, name, prompt, status, image_url, model, created_at, updated_at
-      `,
-      [userId, name, cleanPrompt, fakeImageUrl(name)],
-    );
+    const asset = await prisma.assets.create({
+      data: {
+        owner_id: userId,
+        name,
+        prompt: cleanPrompt,
+        image_url: fakeImageUrl(name),
+      },
+      select: {
+        id: true,
+        owner_id: true,
+        name: true,
+        prompt: true,
+        status: true,
+        image_url: true,
+        model: true,
+        created_at: true,
+        updated_at: true,
+      },
+    });
 
-    res.status(201).json(result.rows[0]);
+    res.status(201).json(asset);
   } catch {
     res.status(500).json({
       error: "Failed to create asset",
@@ -121,24 +151,25 @@ assetsRouter.patch("/:id", async (req, res) => {
   }
 
   try {
-    const result = await db.query(
-      `
-        UPDATE assets
-        SET name = $1, updated_at = NOW()
-        WHERE id = $2 AND owner_id = $3
-        RETURNING id, owner_id, name, prompt, status, image_url, model, created_at, updated_at
-      `,
-      [name.trim(), id, userId],
-    );
+    const updateResult = await prisma.assets.updateMany({
+      where: {
+        id,
+        owner_id: userId,
+      },
+      data: {
+        name: name.trim(),
+        updated_at: new Date(),
+      },
+    });
 
-    if (result.rows.length === 0) {
+    if (updateResult.count === 0) {
       res.status(404).json({
         error: "Asset not found",
       });
       return;
     }
 
-    res.json(result.rows[0]);
+    res.status(204).send();
   } catch {
     res.status(500).json({
       error: "Failed to update asset",
@@ -158,16 +189,14 @@ assetsRouter.delete("/:id", async (req, res) => {
   }
 
   try {
-    const result = await db.query(
-      `
-        DELETE FROM assets
-        WHERE id = $1 AND owner_id = $2
-        RETURNING id
-      `,
-      [id, userId],
-    );
+    const deleteResult = await prisma.assets.deleteMany({
+      where: {
+        id,
+        owner_id: userId,
+      },
+    });
 
-    if (result.rows.length === 0) {
+    if (deleteResult.count === 0) {
       res.status(404).json({
         error: "Asset not found",
       });
