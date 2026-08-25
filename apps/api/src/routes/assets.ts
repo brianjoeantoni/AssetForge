@@ -126,18 +126,36 @@ assetsRouter.post("/", async (req, res) => {
     });
 
     // Put a new job into Redis so a worker can process it later
-    await generationQueue.add(
-      "generate-asset", // job name
-      {
-        assetId: asset.id,
-        ownerId: userId,
-        prompt: cleanPrompt,
-        name,
-      },
-      {
-        jobId: asset.id,
-      },
-    );
+    try {
+      await generationQueue.add(
+        "generate-asset",
+        {
+          assetId: asset.id,
+          ownerId: userId,
+          prompt: cleanPrompt,
+          name,
+        },
+        {
+          jobId: asset.id,
+        },
+      );
+    } catch {
+      await prisma.assets.updateMany({
+        where: {
+          id: asset.id,
+          owner_id: userId,
+        },
+        data: {
+          status: "FAILED",
+          updated_at: new Date(),
+        },
+      });
+
+      res.status(500).json({
+        error: "Asset was created but generation could not be queued",
+      });
+      return;
+    }
 
     res.status(201).json(asset);
   } catch {

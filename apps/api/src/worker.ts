@@ -32,7 +32,11 @@ const worker = new Worker(
     });
 
     if (processingResult.count === 0) {
-      throw new Error(`Asset ${assetId} was not found for owner ${ownerId}`);
+      console.log(`Skipping deleted asset ${assetId}`);
+      return {
+        assetId,
+        status: "SKIPPED",
+      };
     }
 
     await wait(3000); // Simulates slow image generation. Later, this is where a real AI image API call would go
@@ -51,9 +55,12 @@ const worker = new Worker(
     });
 
     if (completedResult.count === 0) {
-      throw new Error(`Asset ${assetId} was not found for owner ${ownerId}`);
+      console.log(`Skipping deleted asset ${assetId}`);
+      return {
+        assetId,
+        status: "SKIPPED",
+      };
     }
-
     return {
       assetId,
       status: "COMPLETED",
@@ -72,15 +79,24 @@ worker.on("completed", (job) => {
 worker.on("failed", async (job, error) => {
   console.error(`Failed asset generation job ${job?.id ?? "unknown"}`, error);
 
-  const assetId = job?.data.assetId;
+  const attemptsMade = job?.attemptsMade ?? 0;
+  const maxAttempts = job?.opts.attempts ?? 1;
 
-  if (!assetId) {
+  if (attemptsMade < maxAttempts) {
+    return;
+  }
+
+  const assetId = job?.data.assetId;
+  const ownerId = job?.data.ownerId;
+
+  if (!assetId || !ownerId) {
     return;
   }
 
   await prisma.assets.updateMany({
     where: {
       id: assetId,
+      owner_id: ownerId,
     },
     data: {
       status: "FAILED",
