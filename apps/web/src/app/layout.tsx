@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
 import { QueryProvider } from "@/components/QueryProvider";
+import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
+import { Geist } from "next/font/google";
+import { cn } from "@/lib/utils";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
   title: "AssetForge",
@@ -13,9 +19,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={cn("font-sans", geist.variable)}>
       <body>
-        <QueryProvider>{children}</QueryProvider>
+        <TooltipProvider>
+          <QueryProvider>{children}</QueryProvider>
+          <Toaster richColors position="top-right" theme="light" />
+        </TooltipProvider>
       </body>
     </html>
   );

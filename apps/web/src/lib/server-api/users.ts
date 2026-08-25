@@ -6,6 +6,11 @@ export async function getUsers() {
   return data;
 }
 
+export async function getUser(id: string) {
+  const { data } = await api.get<ApiUser>(`/users/${id}`);
+  return data;
+}
+
 export async function createUser(input: CreateUserInput) {
   const { data } = await api.post<ApiUser>("/users", input);
   return data;

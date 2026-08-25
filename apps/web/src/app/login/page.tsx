@@ -6,6 +6,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { LogIn } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,15 +23,19 @@ export default function LoginPage() {
     mutationFn: login,
     onSuccess: (user) => {
       queryClient.setQueryData(["auth", "me"], user);
+      toast.success("Logged in");
       router.push("/dashboard");
     },
     onError: (loginError) => {
       if (isAxiosError<{ error?: string }>(loginError)) {
-        setError(loginError.response?.data.error ?? "Failed to login");
+        const message = loginError.response?.data.error ?? "Failed to login";
+        setError(message);
+        toast.error(message);
         return;
       }
 
       setError("Failed to login");
+      toast.error("Failed to login");
     },
   });
 

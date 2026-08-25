@@ -5,7 +5,8 @@ import { isAxiosError } from "axios";
 import { FormEvent, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, Save, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { AuthGate } from "@/components/AuthGate";
 import { Button } from "@/components/ui/button";
@@ -51,9 +52,12 @@ function AssetDetailContent({ user }: { user: ApiUser }) {
       setActionError("");
       queryClient.invalidateQueries({ queryKey: ["assets", params.id] });
       queryClient.invalidateQueries({ queryKey: ["assets"] });
+      toast.success("Asset renamed");
     },
     onError: (updateError) => {
-      setActionError(errorMessage(updateError, "Failed to update asset"));
+      const message = errorMessage(updateError, "Failed to update asset");
+      setActionError(message);
+      toast.error(message);
     },
   });
 
@@ -62,10 +66,13 @@ function AssetDetailContent({ user }: { user: ApiUser }) {
     onSuccess: () => {
       setActionError("");
       queryClient.invalidateQueries({ queryKey: ["assets"] });
-      router.push("/dashboard");
+      toast.success("Asset deleted");
+      router.push("/assets");
     },
     onError: (deleteError) => {
-      setActionError(errorMessage(deleteError, "Failed to delete asset"));
+      const message = errorMessage(deleteError, "Failed to delete asset");
+      setActionError(message);
+      toast.error(message);
     },
   });
 
@@ -94,10 +101,10 @@ function AssetDetailContent({ user }: { user: ApiUser }) {
       <div className="space-y-4">
         <Link
           className="inline-flex items-center gap-2 text-sm font-medium text-primary"
-          href="/dashboard"
+          href="/assets"
         >
           <ArrowLeft className="h-4 w-4" />
-          Dashboard
+          Assets
         </Link>
         <div className="rounded-lg border bg-white p-5 text-sm text-red-700">
           {message ?? "Failed to load asset"}
@@ -120,10 +127,10 @@ function AssetDetailContent({ user }: { user: ApiUser }) {
     <div className="space-y-5">
       <Link
         className="inline-flex items-center gap-2 text-sm font-medium text-primary"
-        href="/dashboard"
+        href="/assets"
       >
         <ArrowLeft className="h-4 w-4" />
-        Dashboard
+        Assets
       </Link>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
@@ -149,7 +156,10 @@ function AssetDetailContent({ user }: { user: ApiUser }) {
               <CardTitle>{asset.name}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <form className="space-y-3" onSubmit={renameAsset}>
+              <form
+                className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
+                onSubmit={renameAsset}
+              >
                 <label className="block space-y-1 text-sm font-medium">
                   <span>Name</span>
                   <Input
@@ -159,7 +169,11 @@ function AssetDetailContent({ user }: { user: ApiUser }) {
                   />
                 </label>
                 <Button type="submit" disabled={updateAssetMutation.isPending}>
-                  <Save className="h-4 w-4" />
+                  {updateAssetMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
                   {updateAssetMutation.isPending ? "Saving..." : "Save"}
                 </Button>
               </form>
@@ -213,9 +227,9 @@ function AssetDetailContent({ user }: { user: ApiUser }) {
           </Card>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <Link className="block" href="/dashboard">
+            <Link className="block" href="/assets">
               <Button className="w-full" variant="outline">
-                Back to dashboard
+                Back to assets
               </Button>
             </Link>
 

@@ -6,6 +6,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { UserPlus } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,15 +23,20 @@ export default function RegisterPage() {
   const registerMutation = useMutation({
     mutationFn: register,
     onSuccess: () => {
+      toast.success("Account created");
       router.push("/login");
     },
     onError: (registerError) => {
       if (isAxiosError<{ error?: string }>(registerError)) {
-        setError(registerError.response?.data.error ?? "Failed to register");
+        const message =
+          registerError.response?.data.error ?? "Failed to register";
+        setError(message);
+        toast.error(message);
         return;
       }
 
       setError("Failed to register");
+      toast.error("Failed to register");
     },
   });
 
@@ -40,6 +46,7 @@ export default function RegisterPage() {
 
     if (password !== confirmPassword) {
       setError("Passwords do not match");
+      toast.error("Passwords do not match");
       return;
     }
 
