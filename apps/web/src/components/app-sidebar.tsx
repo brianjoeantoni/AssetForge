@@ -38,6 +38,14 @@ const navItems = [
   },
 ]
 
+function isNavItemActive(pathname: string, itemUrl: string) {
+  if (itemUrl === "/assets") {
+    return pathname === itemUrl || pathname.startsWith(`${itemUrl}/`)
+  }
+
+  return pathname === itemUrl
+}
+
 export function AppSidebar({
   user,
   onLogout,
@@ -80,7 +88,7 @@ export function AppSidebar({
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     tooltip={item.title}
-                    isActive={pathname === item.url}
+                    isActive={isNavItemActive(pathname, item.url)}
                     render={<Link href={item.url} />}
                   >
                     <item.icon />
