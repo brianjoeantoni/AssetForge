@@ -3,6 +3,8 @@ import { requireAuth, type AuthenticatedRequest } from "../middleware.js";
 import { prisma } from "../prisma.js";
 import { fakeImageUrl, isUuid, titleFromPrompt } from "../utils.js";
 import { generationQueue } from "../queues/generation.js";
+import { connectMongo } from "../mongo.js";
+import { GenerationMetadata } from "../models/generation-metadata.js";
 
 export const assetsRouter = Router();
 
@@ -85,6 +87,59 @@ assetsRouter.get("/:id", async (req, res) => {
   } catch {
     res.status(500).json({
       error: "Failed to fetch asset",
+    });
+  }
+});
+
+assetsRouter.get("/:id/metadata", async (req, res) => {
+  const { userId } = auth(req);
+  const { id } = req.params;
+
+  if (typeof id !== "string" || !isUuid(id)) {
+    res.status(400).json({
+      error: "Invalid asset id",
+    });
+    return;
+  }
+
+  try {
+    const asset = await prisma.assets.findFirst({
+      where: {
+        id,
+        owner_id: userId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!asset) {
+      res.status(404).json({
+        error: "Asset not found",
+      });
+      return;
+    }
+
+    await connectMongo();
+
+    const metadata = await GenerationMetadata.findOne({
+      assetId: id,
+      ownerId: userId,
+    })
+      .select("-__v")
+      .lean();
+
+    if (!metadata) {
+      res.status(404).json({
+        error: "Asset metadata not found",
+      });
+      return;
+    }
+
+    res.json(metadata);
+  } catch {
+    res.status(500).json({
+      error: "Failed to fetch asset metadata",
     });
   }
 });

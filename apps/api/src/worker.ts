@@ -6,6 +6,8 @@ import {
 } from "./queues/generation.js";
 import { prisma } from "./prisma.js";
 import { fakeImageUrl } from "./utils.js";
+import { connectMongo, disconnectMongo } from "./mongo.js";
+import { GenerationMetadata } from "./models/generation-metadata.js";
 
 function wait(ms: number) {
   return new Promise((resolve) => {
@@ -13,10 +15,12 @@ function wait(ms: number) {
   });
 }
 
+await connectMongo();
+
 const worker = new Worker(
   generationQueueName, // queue name
   async (job) => {
-    const { assetId, ownerId, name } = job.data;
+    const { assetId, ownerId, prompt, name } = job.data;
 
     console.log(`Processing asset generation job ${job.id}`);
 
@@ -39,7 +43,28 @@ const worker = new Worker(
       };
     }
 
+    // Store flexible generation execution details in MongoDB
+    await GenerationMetadata.create({
+      assetId,
+      ownerId,
+      prompt,
+      status: "PROCESSING",
+      provider: "mock",
+      model: "WorkerMock-v1",
+      parameters: {
+        width: 960,
+        height: 540,
+        style: "placeholder",
+      },
+      timings: {
+        queuedAt: new Date(job.timestamp),
+        processingStartedAt: new Date(),
+      },
+    });
+
     await wait(3000); // Simulates slow image generation. Later, this is where a real AI image API call would go
+
+    const imageUrl = fakeImageUrl(name);
 
     const completedResult = await prisma.assets.updateMany({
       where: {
@@ -48,7 +73,7 @@ const worker = new Worker(
       },
       data: {
         status: "COMPLETED",
-        image_url: fakeImageUrl(name),
+        image_url: imageUrl,
         model: "WorkerMock-v1",
         updated_at: new Date(),
       },
@@ -61,6 +86,21 @@ const worker = new Worker(
         status: "SKIPPED",
       };
     }
+    await GenerationMetadata.updateOne(
+      {
+        assetId,
+        ownerId,
+      },
+      {
+        $set: {
+          status: "COMPLETED",
+          model: "WorkerMock-v1",
+          "timings.completedAt": new Date(),
+          "rawResponse.imageUrl": imageUrl,
+        },
+      },
+    );
+
     return {
       assetId,
       status: "COMPLETED",
@@ -103,11 +143,26 @@ worker.on("failed", async (job, error) => {
       updated_at: new Date(),
     },
   });
+
+  await GenerationMetadata.updateOne(
+    {
+      assetId,
+      ownerId,
+    },
+    {
+      $set: {
+        status: "FAILED",
+        "timings.failedAt": new Date(),
+        "rawResponse.error": error.message,
+      },
+    },
+  );
 });
 
 async function shutdown() {
   console.log("Shutting down asset generation worker");
   await worker.close();
+  await disconnectMongo();
   await prisma.$disconnect();
   process.exit(0);
 }

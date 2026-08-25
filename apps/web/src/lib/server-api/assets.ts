@@ -1,5 +1,10 @@
 import { api } from "@/lib/http";
-import type { ApiAsset, CreateAssetInput, UpdateAssetInput } from "./types";
+import type {
+  ApiAsset,
+  ApiAssetMetadata,
+  CreateAssetInput,
+  UpdateAssetInput,
+} from "./types";
 
 export async function getAssets() {
   const { data } = await api.get<ApiAsset[]>("/assets");
@@ -8,6 +13,11 @@ export async function getAssets() {
 
 export async function getAsset(id: string) {
   const { data } = await api.get<ApiAsset>(`/assets/${id}`);
+  return data;
+}
+
+export async function getAssetMetadata(id: string) {
+  const { data } = await api.get<ApiAssetMetadata>(`/assets/${id}/metadata`);
   return data;
 }
 

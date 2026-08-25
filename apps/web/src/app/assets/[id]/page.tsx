@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import {
   deleteAsset,
   getAsset,
+  getAssetMetadata,
   updateAsset,
   type ApiAssetStatus,
   type ApiUser,
@@ -54,6 +55,23 @@ function AssetDetailContent({ user }: { user: ApiUser }) {
     retry: false,
     refetchInterval: (query) => {
       const asset = query.state.data;
+      return asset && statusIsPending(asset.status) ? 1000 : false;
+    },
+  });
+
+  const metadataQuery = useQuery({
+    queryKey: ["assets", params.id, "metadata"],
+    queryFn: () => getAssetMetadata(params.id),
+    enabled: Boolean(assetQuery.data),
+    retry: false,
+    refetchInterval: (query) => {
+      const metadata = query.state.data;
+      const asset = assetQuery.data;
+
+      if (metadata && statusIsPending(metadata.status)) {
+        return 1000;
+      }
+
       return asset && statusIsPending(asset.status) ? 1000 : false;
     },
   });
@@ -243,20 +261,63 @@ function AssetDetailContent({ user }: { user: ApiUser }) {
 
           <Card>
             <CardHeader>
-              <CardTitle>Generation Parameters</CardTitle>
+              <CardTitle>Generation Metadata</CardTitle>
             </CardHeader>
             <CardContent>
-              <pre className="max-h-72 overflow-auto rounded-md bg-muted p-3 text-xs">
-                {JSON.stringify(
-                  {
-                    mode: "immediate",
-                    storage: "postgresql",
-                    imageUrl: asset.image_url,
-                  },
-                  null,
-                  2,
-                )}
-              </pre>
+              {metadataQuery.isLoading ? (
+                <div className="text-sm text-muted-foreground">
+                  Loading metadata...
+                </div>
+              ) : metadataQuery.isError ? (
+                <div className="rounded-md border bg-muted p-3 text-sm text-muted-foreground">
+                  Metadata is not available yet.
+                </div>
+              ) : metadataQuery.data ? (
+                <div className="space-y-4">
+                  <dl className="space-y-3 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-muted-foreground">Provider</dt>
+                      <dd>{metadataQuery.data.provider}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-muted-foreground">Model</dt>
+                      <dd>{metadataQuery.data.model}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-muted-foreground">Size</dt>
+                      <dd>
+                        {metadataQuery.data.parameters.width} x{" "}
+                        {metadataQuery.data.parameters.height}
+                      </dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-muted-foreground">Style</dt>
+                      <dd>{metadataQuery.data.parameters.style}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-muted-foreground">Queued</dt>
+                      <dd>
+                        {new Date(
+                          metadataQuery.data.timings.queuedAt,
+                        ).toLocaleTimeString()}
+                      </dd>
+                    </div>
+                    {metadataQuery.data.timings.completedAt ? (
+                      <div className="flex items-center justify-between gap-3">
+                        <dt className="text-muted-foreground">Completed</dt>
+                        <dd>
+                          {new Date(
+                            metadataQuery.data.timings.completedAt,
+                          ).toLocaleTimeString()}
+                        </dd>
+                      </div>
+                    ) : null}
+                  </dl>
+                  <pre className="max-h-56 overflow-auto rounded-md bg-muted p-3 text-xs">
+                    {JSON.stringify(metadataQuery.data.rawResponse ?? {}, null, 2)}
+                  </pre>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
 

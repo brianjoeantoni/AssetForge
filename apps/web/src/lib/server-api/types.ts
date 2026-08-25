@@ -24,6 +24,33 @@ export type ApiAsset = {
   updated_at: string;
 };
 
+export type ApiAssetMetadata = {
+  _id: string;
+  assetId: string;
+  ownerId: string;
+  prompt: string;
+  status: ApiAssetStatus | string;
+  provider: string;
+  model: string;
+  parameters: {
+    width: number;
+    height: number;
+    style: string;
+  };
+  timings: {
+    queuedAt: string;
+    processingStartedAt?: string;
+    completedAt?: string;
+    failedAt?: string;
+  };
+  rawResponse?: {
+    imageUrl?: string;
+    error?: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type RegisterInput = {
   name: string;
   email: string;
