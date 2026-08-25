@@ -2,7 +2,6 @@
 
 import { isAxiosError } from "axios";
 import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Database, FileImage, Loader2, WandSparkles } from "lucide-react";
 import { toast } from "sonner";
@@ -16,11 +15,16 @@ import {
   createAsset,
   getApiHealth,
   getAssets,
+  type ApiAsset,
   type ApiUser,
 } from "@/lib/server-api";
 
+function assetIsPending(asset: ApiAsset) {
+  const status = asset.status.toUpperCase();
+  return status === "QUEUED" || status === "PROCESSING";
+}
+
 function DashboardContent({ user }: { user: ApiUser }) {
-  const router = useRouter();
   const queryClient = useQueryClient();
   const [prompt, setPrompt] = useState("");
   const [error, setError] = useState("");
@@ -41,6 +45,10 @@ function DashboardContent({ user }: { user: ApiUser }) {
   const assetsQuery = useQuery({
     queryKey: ["assets"],
     queryFn: getAssets,
+    refetchInterval: (query) => {
+      const assets = query.state.data;
+      return assets?.some(assetIsPending) ? 1000 : false;
+    },
   });
 
   const createAssetMutation = useMutation({
@@ -49,8 +57,11 @@ function DashboardContent({ user }: { user: ApiUser }) {
       setPrompt("");
       setError("");
       queryClient.invalidateQueries({ queryKey: ["assets"] });
-      toast.success("Asset generated");
-      router.push(`/assets/${asset.id}`);
+      toast.success(
+        asset.status.toUpperCase() === "COMPLETED"
+          ? "Asset generated"
+          : "Asset queued",
+      );
     },
     onError: (assetError) => {
       const message = errorMessage(assetError, "Failed to create asset");

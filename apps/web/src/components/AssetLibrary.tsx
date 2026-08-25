@@ -6,10 +6,9 @@ import { useQuery } from "@tanstack/react-query";
 import { StatusBadge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getAssets, type ApiAsset } from "@/lib/server-api";
-import type { GenerationStatus } from "@/lib/api";
+import { getAssets, type ApiAsset, type ApiAssetStatus } from "@/lib/server-api";
 
-function statusForBadge(status: string): GenerationStatus {
+function statusForBadge(status: string): ApiAssetStatus {
   const normalized = status.toUpperCase();
 
   if (
@@ -24,10 +23,19 @@ function statusForBadge(status: string): GenerationStatus {
   return "COMPLETED";
 }
 
+function assetIsPending(asset: ApiAsset) {
+  const status = statusForBadge(asset.status);
+  return status === "QUEUED" || status === "PROCESSING";
+}
+
 export function AssetLibrary() {
   const assetsQuery = useQuery({
     queryKey: ["assets"],
     queryFn: getAssets,
+    refetchInterval: (query) => {
+      const assets = query.state.data;
+      return assets?.some(assetIsPending) ? 1000 : false;
+    },
   });
 
   const totalAssets = assetsQuery.data?.length ?? 0;

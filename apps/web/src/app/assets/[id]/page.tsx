@@ -10,14 +10,36 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { AuthGate } from "@/components/AuthGate";
 import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   deleteAsset,
   getAsset,
   updateAsset,
+  type ApiAssetStatus,
   type ApiUser,
 } from "@/lib/server-api";
+
+function statusForBadge(status: string): ApiAssetStatus {
+  const normalized = status.toUpperCase();
+
+  if (
+    normalized === "QUEUED" ||
+    normalized === "PROCESSING" ||
+    normalized === "COMPLETED" ||
+    normalized === "FAILED"
+  ) {
+    return normalized;
+  }
+
+  return "COMPLETED";
+}
+
+function statusIsPending(status: string) {
+  const normalized = status.toUpperCase();
+  return normalized === "QUEUED" || normalized === "PROCESSING";
+}
 
 function AssetDetailContent({ user }: { user: ApiUser }) {
   const params = useParams<{ id: string }>();
@@ -30,6 +52,10 @@ function AssetDetailContent({ user }: { user: ApiUser }) {
     queryKey: ["assets", params.id],
     queryFn: () => getAsset(params.id),
     retry: false,
+    refetchInterval: (query) => {
+      const asset = query.state.data;
+      return asset && statusIsPending(asset.status) ? 1000 : false;
+    },
   });
 
   useEffect(() => {
@@ -153,7 +179,10 @@ function AssetDetailContent({ user }: { user: ApiUser }) {
         <aside className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>{asset.name}</CardTitle>
+              <CardTitle className="flex items-center justify-between gap-3">
+                <span className="truncate">{asset.name}</span>
+                <StatusBadge status={statusForBadge(asset.status)} />
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <form
@@ -187,7 +216,12 @@ function AssetDetailContent({ user }: { user: ApiUser }) {
               <dl className="space-y-3 text-sm">
                 <div className="flex items-center justify-between gap-3">
                   <dt className="text-muted-foreground">Status</dt>
-                  <dd>{asset.status.toLowerCase()}</dd>
+                  <dd className="flex items-center gap-2">
+                    {statusIsPending(asset.status) ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                    ) : null}
+                    {asset.status.toLowerCase()}
+                  </dd>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <dt className="text-muted-foreground">Model</dt>

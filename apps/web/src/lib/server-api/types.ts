@@ -10,12 +10,14 @@ export type ApiUser = {
   created_at: string;
 };
 
+export type ApiAssetStatus = "QUEUED" | "PROCESSING" | "COMPLETED" | "FAILED";
+
 export type ApiAsset = {
   id: string;
   owner_id: string;
   name: string;
   prompt: string;
-  status: string;
+  status: ApiAssetStatus | string;
   image_url: string;
   model: string;
   created_at: string;

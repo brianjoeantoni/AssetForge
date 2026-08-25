@@ -2,6 +2,7 @@ import { Router, type Request } from "express";
 import { requireAuth, type AuthenticatedRequest } from "../middleware.js";
 import { prisma } from "../prisma.js";
 import { fakeImageUrl, isUuid, titleFromPrompt } from "../utils.js";
+import { generationQueue } from "../queues/generation.js";
 
 export const assetsRouter = Router();
 
@@ -108,6 +109,7 @@ assetsRouter.post("/", async (req, res) => {
         owner_id: userId,
         name,
         prompt: cleanPrompt,
+        status: "QUEUED",
         image_url: fakeImageUrl(name),
       },
       select: {
@@ -122,6 +124,20 @@ assetsRouter.post("/", async (req, res) => {
         updated_at: true,
       },
     });
+
+    // Put a new job into Redis so a worker can process it later
+    await generationQueue.add(
+      "generate-asset", // job name
+      {
+        assetId: asset.id,
+        ownerId: userId,
+        prompt: cleanPrompt,
+        name,
+      },
+      {
+        jobId: asset.id,
+      },
+    );
 
     res.status(201).json(asset);
   } catch {
