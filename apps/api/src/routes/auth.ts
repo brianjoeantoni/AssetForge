@@ -2,8 +2,8 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { Router } from "express";
 import { config } from "../config.js";
-import { db } from "../db.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware.js";
+import { prisma } from "../prisma.js";
 
 export const authRouter = Router();
 
@@ -34,22 +34,27 @@ authRouter.post("/register", async (req, res) => {
   try {
     const passwordHash = await bcrypt.hash(password, 12);
 
-    const result = await db.query(
-      `
-        INSERT INTO users (name, email, password_hash)
-        VALUES ($1, $2, $3)
-        RETURNING id, name, email, created_at
-      `,
-      [name.trim(), email.trim().toLowerCase(), passwordHash],
-    );
+    const user = await prisma.users.create({
+      data: {
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        password_hash: passwordHash,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        created_at: true,
+      },
+    });
 
-    res.status(201).json(result.rows[0]);
+    res.status(201).json(user);
   } catch (error) {
     if (
       typeof error === "object" &&
       error !== null &&
       "code" in error &&
-      error.code === "23505"
+      error.code === "P2002"
     ) {
       res.status(409).json({
         error: "Email is already registered",
@@ -81,23 +86,25 @@ authRouter.post("/login", async (req, res) => {
   }
 
   try {
-    const result = await db.query(
-      `
-        SELECT id, name, email, password_hash, created_at
-        FROM users
-        WHERE email = $1
-      `,
-      [email.trim().toLowerCase()],
-    );
+    const user = await prisma.users.findUnique({
+      where: {
+        email: email.trim().toLowerCase(),
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        password_hash: true,
+        created_at: true,
+      },
+    });
 
-    if (result.rows.length === 0) {
+    if (!user) {
       res.status(401).json({
         error: "Invalid email or password",
       });
       return;
     }
-
-    const user = result.rows[0];
 
     if (typeof user.password_hash !== "string") {
       res.status(401).json({
@@ -149,23 +156,26 @@ authRouter.get("/me", requireAuth, async (req, res) => {
   const { userId } = req as AuthenticatedRequest;
 
   try {
-    const result = await db.query(
-      `
-        SELECT id, name, email, created_at
-        FROM users
-        WHERE id = $1
-      `,
-      [userId],
-    );
+    const user = await prisma.users.findUnique({
+      where: {
+        id: userId,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        created_at: true,
+      },
+    });
 
-    if (result.rows.length === 0) {
+    if (!user) {
       res.status(401).json({
         error: "Authentication required",
       });
       return;
     }
 
-    res.json(result.rows[0]);
+    res.json(user);
   } catch {
     res.status(500).json({
       error: "Failed to fetch current user",
