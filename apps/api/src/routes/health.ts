@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { db } from "../db.js";
+import { prisma } from "../prisma.js";
 
 export const healthRouter = Router();
 
@@ -16,5 +17,16 @@ healthRouter.get("/db-health", async (_req, res) => {
   res.json({
     ok: true,
     databaseTime: result.rows[0].now,
+  });
+});
+
+healthRouter.get("/prisma-health", async (_req, res) => {
+  const usersCount = await prisma.users.count();
+  const assetsCount = await prisma.assets.count();
+
+  res.json({
+    ok: true,
+    usersCount,
+    assetsCount,
   });
 });
