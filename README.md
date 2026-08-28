@@ -1,60 +1,148 @@
 # AssetForge
 
-AssetForge is a fullstack MVP for an authenticated AI asset-generation workflow. It uses a fake image-generation provider so the architecture can be practiced without external AI API keys.
+AssetForge is a full-stack learning project for an AI asset generation MVP.
+
+The app demonstrates a production-style flow at small scale:
+
+```txt
+Frontend prompt submission
+  -> Express API creates a queued asset in Postgres
+  -> API enqueues a BullMQ job in Redis
+  -> Worker processes the job
+  -> Worker updates Postgres asset status
+  -> Worker writes flexible generation metadata to MongoDB
+  -> Frontend polls and displays the completed asset/metadata
+```
 
 ## Stack
 
-- Next.js, React, TypeScript, Tailwind CSS
-- Express.js REST API
-- PostgreSQL with Prisma
-- MongoDB for flexible generation metadata
-- Redis and BullMQ for background generation jobs
-- HTTP-only JWT cookies
-- Vitest and Supertest
+- Next.js
+- React
+- TypeScript
+- Tailwind CSS
+- shadcn-style UI components
+- Express
+- PostgreSQL
+- Prisma
+- Redis
+- BullMQ
+- MongoDB
+- Mongoose
 - Docker Compose
+
+## Repository Shape
+
+```txt
+apps/
+  api/  -> Express API, Prisma/Postgres access, BullMQ worker, Mongo metadata
+  web/  -> Next.js frontend
+```
+
+## Local Services
+
+Docker Compose runs the local databases and queue broker:
+
+```txt
+Postgres -> localhost:5432
+Redis    -> localhost:6379
+MongoDB  -> localhost:27017
+```
+
+Start them with:
+
+```bash
+docker compose up -d postgres redis mongo
+```
 
 ## Local Setup
 
+Install dependencies:
+
 ```bash
 npm install
-cp .env.example .env
-docker compose up -d postgres mongo redis
-npm run db:generate
-npm run db:migrate
+```
+
+Run database migration:
+
+```bash
+npm run db:migrate -w @assetforge/api
+```
+
+Start the full app:
+
+```bash
 npm run dev
 ```
 
 Open:
 
-- Web: http://localhost:3000
-- API: http://localhost:4000/health
-
-## Docker Setup
-
-```bash
-docker compose up --build
+```txt
+http://localhost:3000
 ```
 
-The first full Docker run may require applying Prisma migrations from your host or a one-off container command:
+API:
 
-```bash
-npm run db:migrate
+```txt
+http://localhost:4000
 ```
-
-## Core Flow
-
-1. Register or log in.
-2. Submit a prompt from the dashboard.
-3. The API creates a generation record and queues a BullMQ job.
-4. The worker updates status, creates a fake SVG asset, writes flexible metadata to MongoDB, and marks the generation complete.
-5. The dashboard polls recent generations and links to completed assets.
 
 ## Useful Scripts
 
 ```bash
 npm run dev
 npm run build
-npm run test
 npm run typecheck
-npm run db:studio
+npm run dev -w @assetforge/api
+npm run dev:worker -w @assetforge/api
+npm run dev -w @assetforge/web
+npm run db:migrate -w @assetforge/api
+```
+
+## Main Features
+
+- Register, login, logout
+- HTTP-only cookie JWT auth
+- Protected frontend routes
+- Protected backend routes
+- Asset creation and library
+- Asset detail, rename, and delete
+- Async asset generation with Redis/BullMQ
+- Worker-driven status updates
+- MongoDB generation metadata
+- Frontend polling for queued/processing assets
+
+## Data Stores
+
+PostgreSQL is the source of truth for stable relational data:
+
+```txt
+users
+assets
+asset ownership
+asset status
+```
+
+Redis is used for temporary queue coordination:
+
+```txt
+BullMQ waiting/active/completed/failed jobs
+```
+
+MongoDB stores flexible generation metadata:
+
+```txt
+generation parameters
+timings
+provider/model information
+raw provider response
+```
+
+## Development Note
+
+Next.js may rewrite `apps/web/next-env.d.ts` differently during `npm run dev` and `npm run build`.
+Before committing, stop the dev server and run:
+
+```bash
+npm run build
+git status
 ```

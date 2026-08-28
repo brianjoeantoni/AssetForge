@@ -1,85 +1,189 @@
 "use client";
 
 import Link from "next/link";
+import { isAxiosError } from "axios";
 import { FormEvent, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Save, Trash2 } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Loader2, Save, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { AuthGate } from "@/components/AuthGate";
-import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { apiFetch, assetImageUrl, type Asset } from "@/lib/api";
+import {
+  deleteAsset,
+  getAsset,
+  getAssetMetadata,
+  updateAsset,
+  type ApiAssetStatus,
+  type ApiUser,
+} from "@/lib/server-api";
 
-function AssetDetailContent() {
+function statusForBadge(status: string): ApiAssetStatus {
+  const normalized = status.toUpperCase();
+
+  if (
+    normalized === "QUEUED" ||
+    normalized === "PROCESSING" ||
+    normalized === "COMPLETED" ||
+    normalized === "FAILED"
+  ) {
+    return normalized;
+  }
+
+  return "COMPLETED";
+}
+
+function statusIsPending(status: string) {
+  const normalized = status.toUpperCase();
+  return normalized === "QUEUED" || normalized === "PROCESSING";
+}
+
+function AssetDetailContent({ user }: { user: ApiUser }) {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const [asset, setAsset] = useState<Asset | null>(null);
-  const [metadata, setMetadata] = useState<unknown>(null);
+  const queryClient = useQueryClient();
   const [name, setName] = useState("");
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [actionError, setActionError] = useState("");
+
+  const assetQuery = useQuery({
+    queryKey: ["assets", params.id],
+    queryFn: () => getAsset(params.id),
+    retry: false,
+    refetchInterval: (query) => {
+      const asset = query.state.data;
+      return asset && statusIsPending(asset.status) ? 1000 : false;
+    },
+  });
+
+  const metadataQuery = useQuery({
+    queryKey: ["assets", params.id, "metadata"],
+    queryFn: () => getAssetMetadata(params.id),
+    enabled: Boolean(assetQuery.data),
+    retry: false,
+    refetchInterval: (query) => {
+      const metadata = query.state.data;
+      const asset = assetQuery.data;
+
+      if (metadata && statusIsPending(metadata.status)) {
+        return 1000;
+      }
+
+      return asset && statusIsPending(asset.status) ? 1000 : false;
+    },
+  });
 
   useEffect(() => {
-    apiFetch<{ asset: Asset; metadata: unknown }>(`/assets/${params.id}`)
-      .then((response) => {
-        setAsset(response.asset);
-        setMetadata(response.metadata);
-        setName(response.asset.name);
-      })
-      .catch((loadError) => setError((loadError as Error).message));
-  }, [params.id]);
+    if (assetQuery.data) {
+      setName(assetQuery.data.name);
+    }
+  }, [assetQuery.data]);
 
-  async function rename(event: FormEvent) {
+  function errorMessage(error: unknown, fallback: string) {
+    if (isAxiosError<{ error?: string }>(error)) {
+      return error.response?.data.error ?? fallback;
+    }
+
+    return fallback;
+  }
+
+  const updateAssetMutation = useMutation({
+    mutationFn: updateAsset,
+    onSuccess: () => {
+      setActionError("");
+      queryClient.invalidateQueries({ queryKey: ["assets", params.id] });
+      queryClient.invalidateQueries({ queryKey: ["assets"] });
+      toast.success("Asset renamed");
+    },
+    onError: (updateError) => {
+      const message = errorMessage(updateError, "Failed to update asset");
+      setActionError(message);
+      toast.error(message);
+    },
+  });
+
+  const deleteAssetMutation = useMutation({
+    mutationFn: deleteAsset,
+    onSuccess: () => {
+      setActionError("");
+      queryClient.invalidateQueries({ queryKey: ["assets"] });
+      toast.success("Asset deleted");
+      router.push("/assets");
+    },
+    onError: (deleteError) => {
+      const message = errorMessage(deleteError, "Failed to delete asset");
+      setActionError(message);
+      toast.error(message);
+    },
+  });
+
+  function renameAsset(event: FormEvent) {
     event.preventDefault();
-    if (!asset) return;
-    setSaving(true);
-    setError("");
+    setActionError("");
 
-    try {
-      const response = await apiFetch<{ asset: Asset }>(`/assets/${asset.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name })
-      });
-      setAsset(response.asset);
-    } catch (renameError) {
-      setError((renameError as Error).message);
-    } finally {
-      setSaving(false);
-    }
+    updateAssetMutation.mutate({
+      id: params.id,
+      name,
+    });
   }
 
-  async function deleteAsset() {
-    if (!asset) return;
-    setError("");
-
-    try {
-      await apiFetch<void>(`/assets/${asset.id}`, { method: "DELETE" });
-      router.push("/dashboard");
-    } catch (deleteError) {
-      setError((deleteError as Error).message);
-    }
+  if (assetQuery.isLoading) {
+    return (
+      <div className="text-sm text-muted-foreground">Loading asset...</div>
+    );
   }
 
-  if (!asset && !error) {
-    return <div className="text-sm text-muted-foreground">Loading asset...</div>;
+  if (assetQuery.isError) {
+    const message = isAxiosError<{ error?: string }>(assetQuery.error)
+      ? assetQuery.error.response?.data.error
+      : null;
+
+    return (
+      <div className="space-y-4">
+        <Link
+          className="inline-flex items-center gap-2 text-sm font-medium text-primary"
+          href="/assets"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Assets
+        </Link>
+        <div className="rounded-lg border bg-white p-5 text-sm text-red-700">
+          {message ?? "Failed to load asset"}
+        </div>
+      </div>
+    );
   }
+
+  const asset = assetQuery.data;
 
   if (!asset) {
-    return <div className="rounded-lg border bg-white p-5 text-sm text-red-700">{error}</div>;
+    return (
+      <div className="rounded-lg border bg-white p-5 text-sm text-red-700">
+        Asset not found
+      </div>
+    );
   }
 
   return (
     <div className="space-y-5">
-      <Link className="inline-flex items-center gap-2 text-sm font-medium text-primary" href="/dashboard">
+      <Link
+        className="inline-flex items-center gap-2 text-sm font-medium text-primary"
+        href="/assets"
+      >
         <ArrowLeft className="h-4 w-4" />
-        Dashboard
+        Assets
       </Link>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
         <section className="space-y-4">
-          <img className="aspect-video w-full rounded-lg border bg-white object-cover" src={assetImageUrl(asset.imageUrl)} alt={asset.name} />
+          <img
+            className="aspect-video w-full rounded-lg border bg-white object-cover"
+            src={asset.image_url}
+            alt={asset.name}
+          />
           <Card>
             <CardHeader>
               <CardTitle>Prompt</CardTitle>
@@ -93,33 +197,48 @@ function AssetDetailContent() {
         <aside className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Asset</CardTitle>
+              <CardTitle className="flex items-center justify-between gap-3">
+                <span className="truncate">{asset.name}</span>
+                <StatusBadge status={statusForBadge(asset.status)} />
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              <form className="space-y-3" onSubmit={rename}>
+            <CardContent className="space-y-4">
+              <form
+                className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
+                onSubmit={renameAsset}
+              >
                 <label className="block space-y-1 text-sm font-medium">
                   <span>Name</span>
-                  <Input value={name} onChange={(event) => setName(event.target.value)} required />
+                  <Input
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    required
+                  />
                 </label>
-                <Button type="submit" disabled={saving}>
-                  <Save className="h-4 w-4" />
-                  {saving ? "Saving..." : "Save"}
+                <Button type="submit" disabled={updateAssetMutation.isPending}>
+                  {updateAssetMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  {updateAssetMutation.isPending ? "Saving..." : "Save"}
                 </Button>
               </form>
-              {error ? <p className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Generation Details</CardTitle>
-            </CardHeader>
-            <CardContent>
+              {actionError ? (
+                <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  {actionError}
+                </p>
+              ) : null}
+
               <dl className="space-y-3 text-sm">
                 <div className="flex items-center justify-between gap-3">
                   <dt className="text-muted-foreground">Status</dt>
-                  <dd>
-                    <StatusBadge status={asset.status} />
+                  <dd className="flex items-center gap-2">
+                    {statusIsPending(asset.status) ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                    ) : null}
+                    {asset.status.toLowerCase()}
                   </dd>
                 </div>
                 <div className="flex items-center justify-between gap-3">
@@ -128,11 +247,13 @@ function AssetDetailContent() {
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <dt className="text-muted-foreground">Created</dt>
-                  <dd>{new Date(asset.createdAt).toLocaleString()}</dd>
+                  <dd>{new Date(asset.created_at).toLocaleString()}</dd>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <dt className="text-muted-foreground">Generation ID</dt>
-                  <dd className="max-w-40 truncate font-mono text-xs">{asset.generationId}</dd>
+                  <dt className="text-muted-foreground">Owner</dt>
+                  <dd className="max-w-40 truncate font-mono text-xs">
+                    {user.id}
+                  </dd>
                 </div>
               </dl>
             </CardContent>
@@ -140,19 +261,83 @@ function AssetDetailContent() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Parameters</CardTitle>
+              <CardTitle>Generation Metadata</CardTitle>
             </CardHeader>
             <CardContent>
-              <pre className="max-h-72 overflow-auto rounded-md bg-muted p-3 text-xs">
-                {JSON.stringify(metadata ?? { note: "No metadata recorded" }, null, 2)}
-              </pre>
+              {metadataQuery.isLoading ? (
+                <div className="text-sm text-muted-foreground">
+                  Loading metadata...
+                </div>
+              ) : metadataQuery.isError ? (
+                <div className="rounded-md border bg-muted p-3 text-sm text-muted-foreground">
+                  Metadata is not available yet.
+                </div>
+              ) : metadataQuery.data ? (
+                <div className="space-y-4">
+                  <dl className="space-y-3 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-muted-foreground">Provider</dt>
+                      <dd>{metadataQuery.data.provider}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-muted-foreground">Model</dt>
+                      <dd>{metadataQuery.data.model}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-muted-foreground">Size</dt>
+                      <dd>
+                        {metadataQuery.data.parameters.width} x{" "}
+                        {metadataQuery.data.parameters.height}
+                      </dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-muted-foreground">Style</dt>
+                      <dd>{metadataQuery.data.parameters.style}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-muted-foreground">Queued</dt>
+                      <dd>
+                        {new Date(
+                          metadataQuery.data.timings.queuedAt,
+                        ).toLocaleTimeString()}
+                      </dd>
+                    </div>
+                    {metadataQuery.data.timings.completedAt ? (
+                      <div className="flex items-center justify-between gap-3">
+                        <dt className="text-muted-foreground">Completed</dt>
+                        <dd>
+                          {new Date(
+                            metadataQuery.data.timings.completedAt,
+                          ).toLocaleTimeString()}
+                        </dd>
+                      </div>
+                    ) : null}
+                  </dl>
+                  <pre className="max-h-56 overflow-auto rounded-md bg-muted p-3 text-xs">
+                    {JSON.stringify(metadataQuery.data.rawResponse ?? {}, null, 2)}
+                  </pre>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
 
-          <Button variant="destructive" onClick={deleteAsset}>
-            <Trash2 className="h-4 w-4" />
-            Delete Asset
-          </Button>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Link className="block" href="/assets">
+              <Button className="w-full" variant="outline">
+                Back to assets
+              </Button>
+            </Link>
+
+            <Button
+              className="w-full"
+              variant="destructive"
+              onClick={() => deleteAssetMutation.mutate(asset.id)}
+              disabled={deleteAssetMutation.isPending}
+            >
+              <Trash2 className="h-4 w-4" />
+              {deleteAssetMutation.isPending ? "Deleting..." : "Delete Asset"}
+            </Button>
+          </div>
         </aside>
       </div>
     </div>
@@ -164,7 +349,7 @@ export default function AssetDetailPage() {
     <AuthGate>
       {(user) => (
         <AppShell user={user}>
-          <AssetDetailContent />
+          <AssetDetailContent user={user} />
         </AppShell>
       )}
     </AuthGate>

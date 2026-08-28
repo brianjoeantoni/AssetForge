@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { isAxiosError } from "axios";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useMutation } from "@tanstack/react-query";
 import { UserPlus } from "lucide-react";
-import { apiFetch, type User } from "@/lib/api";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { register } from "@/lib/server-api";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -16,30 +19,42 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  async function submit(event: FormEvent) {
+  const registerMutation = useMutation({
+    mutationFn: register,
+    onSuccess: () => {
+      toast.success("Account created");
+      router.push("/login");
+    },
+    onError: (registerError) => {
+      if (isAxiosError<{ error?: string }>(registerError)) {
+        const message =
+          registerError.response?.data.error ?? "Failed to register";
+        setError(message);
+        toast.error(message);
+        return;
+      }
+
+      setError("Failed to register");
+      toast.error("Failed to register");
+    },
+  });
+
+  function submit(event: FormEvent) {
     event.preventDefault();
     setError("");
 
     if (password !== confirmPassword) {
       setError("Passwords do not match");
+      toast.error("Passwords do not match");
       return;
     }
 
-    setLoading(true);
-
-    try {
-      await apiFetch<{ user: User }>("/auth/register", {
-        method: "POST",
-        body: JSON.stringify({ name, email, password })
-      });
-      router.push("/dashboard");
-    } catch (registerError) {
-      setError((registerError as Error).message);
-    } finally {
-      setLoading(false);
-    }
+    registerMutation.mutate({
+      name,
+      email,
+      password,
+    });
   }
 
   return (
@@ -80,9 +95,9 @@ export default function RegisterPage() {
               />
             </label>
             {error ? <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
-            <Button className="w-full" type="submit" disabled={loading}>
+            <Button className="w-full" type="submit" disabled={registerMutation.isPending}>
               <UserPlus className="h-4 w-4" />
-              {loading ? "Creating..." : "Create Account"}
+              {registerMutation.isPending ? "Creating..." : "Create Account"}
             </Button>
           </form>
           <p className="mt-5 text-center text-sm text-muted-foreground">

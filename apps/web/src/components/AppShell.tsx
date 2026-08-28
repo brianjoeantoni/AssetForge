@@ -1,39 +1,87 @@
 "use client";
 
-import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
-import { LogOut, UserCircle } from "lucide-react";
-import { apiFetch, type User } from "@/lib/api";
-import { Button } from "@/components/ui/button";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { AppSidebar } from "@/components/app-sidebar";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+} from "@/components/ui/breadcrumb";
+import { Separator } from "@/components/ui/separator";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+import { logout, type ApiUser } from "@/lib/server-api";
 
-export function AppShell({ user, children }: { user: User; children: React.ReactNode }) {
+const pageTitles: Record<string, string> = {
+  "/dashboard": "Dashboard",
+  "/assets": "Assets",
+  "/profile": "Profile",
+};
+
+export function AppShell({
+  user,
+  children,
+}: {
+  user: ApiUser;
+  children: React.ReactNode;
+}) {
   const router = useRouter();
+  const pathname = usePathname();
+  const queryClient = useQueryClient();
+  const pageTitle = pageTitles[pathname] ?? "Asset Detail";
 
-  async function logout() {
-    await apiFetch<void>("/auth/logout", { method: "POST" });
-    router.push("/login");
-  }
+  const logoutMutation = useMutation({
+    mutationFn: logout,
+    onSuccess: () => {
+      toast.success("Logged out");
+    },
+    onError: () => {
+      toast.error("Failed to log out");
+    },
+    onSettled: () => {
+      queryClient.removeQueries({ queryKey: ["auth", "me"] });
+      router.push("/login");
+    },
+  });
 
   return (
-    <main className="min-h-screen bg-background">
-      <header className="border-b bg-white">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-          <Link href="/dashboard" className="text-xl font-semibold tracking-normal">
-            AssetForge
-          </Link>
-          <div className="flex items-center gap-3">
-            <div className="hidden items-center gap-2 text-sm text-muted-foreground sm:flex">
-              <UserCircle className="h-4 w-4" />
-              <span>{user.name}</span>
-            </div>
-            <Button variant="outline" size="sm" onClick={logout}>
-              <LogOut className="h-4 w-4" />
-              Logout
-            </Button>
+    <SidebarProvider>
+      <AppSidebar
+        user={user}
+        onLogout={() => logoutMutation.mutate()}
+        logoutPending={logoutMutation.isPending}
+      />
+      <SidebarInset>
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-background transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+          <div className="flex items-center gap-2 px-4">
+            <SidebarTrigger className="-ml-1" />
+            <Separator
+              orientation="vertical"
+              className="mr-2 data-vertical:h-4 data-vertical:self-auto"
+            />
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  <BreadcrumbPage>{pageTitle}</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+          </div>
+        </header>
+
+        <div className="flex flex-1 flex-col p-4 py-8 sm:p-6 sm:py-8 lg:p-8 lg:py-10">
+          <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+            {children}
           </div>
         </div>
-      </header>
-      <div className="mx-auto max-w-6xl px-4 py-6">{children}</div>
-    </main>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

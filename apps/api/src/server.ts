@@ -1,8 +1,7 @@
-import { createApp } from "./app.js";
+import "dotenv/config";
+import { app } from "./app.js";
 import { config } from "./config.js";
 
-const app = createApp();
-
 app.listen(config.port, () => {
-  console.log(`AssetForge API listening on http://localhost:${config.port}`);
+  console.log(`AssetForge API running on http://localhost:${config.port}`);
 });

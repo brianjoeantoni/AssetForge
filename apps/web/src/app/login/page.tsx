@@ -1,37 +1,52 @@
 "use client";
 
 import Link from "next/link";
+import { isAxiosError } from "axios";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { LogIn } from "lucide-react";
-import { apiFetch, type User } from "@/lib/api";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { login } from "@/lib/server-api";
 
 export default function LoginPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  async function submit(event: FormEvent) {
+  const loginMutation = useMutation({
+    mutationFn: login,
+    onSuccess: (user) => {
+      queryClient.setQueryData(["auth", "me"], user);
+      toast.success("Logged in");
+      router.push("/dashboard");
+    },
+    onError: (loginError) => {
+      if (isAxiosError<{ error?: string }>(loginError)) {
+        const message = loginError.response?.data.error ?? "Failed to login";
+        setError(message);
+        toast.error(message);
+        return;
+      }
+
+      setError("Failed to login");
+      toast.error("Failed to login");
+    },
+  });
+
+  function submit(event: FormEvent) {
     event.preventDefault();
     setError("");
-    setLoading(true);
 
-    try {
-      await apiFetch<{ user: User }>("/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ email, password })
-      });
-      router.push("/dashboard");
-    } catch (loginError) {
-      setError((loginError as Error).message);
-    } finally {
-      setLoading(false);
-    }
+    loginMutation.mutate({
+      email,
+      password,
+    });
   }
 
   return (
@@ -52,9 +67,9 @@ export default function LoginPage() {
               <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
             </label>
             {error ? <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
-            <Button className="w-full" type="submit" disabled={loading}>
+            <Button className="w-full" type="submit" disabled={loginMutation.isPending}>
               <LogIn className="h-4 w-4" />
-              {loading ? "Logging in..." : "Login"}
+              {loginMutation.isPending ? "Logging in..." : "Login"}
             </Button>
           </form>
           <p className="mt-5 text-center text-sm text-muted-foreground">

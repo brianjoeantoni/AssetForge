@@ -3,22 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "workspaces": [
-    "apps/*",
-    "packages/*"
+    "apps/*"
   ],
   "scripts": {
-    "dev": "npm run db:generate && npm run build -w @assetforge/db && npm run build -w @assetforge/queue && dotenv -e .env -- concurrently -n api,worker,web -c cyan,magenta,green \"npm run dev -w @assetforge/api\" \"npm run dev -w @assetforge/worker\" \"npm run dev -w @assetforge/web\"",
-    "build": "npm run db:generate && npm run build -w @assetforge/db && npm run build -w @assetforge/queue && npm run build -w @assetforge/api && npm run build -w @assetforge/worker && npm run build -w @assetforge/web",
-    "test": "dotenv -e .env -- npm run test -w @assetforge/worker && dotenv -e .env -- npm run test -w @assetforge/api",
-    "typecheck": "npm run db:generate && npm run typecheck -w @assetforge/db && npm run typecheck -w @assetforge/queue && npm run build -w @assetforge/db && npm run build -w @assetforge/queue && npm run typecheck -w @assetforge/api && npm run typecheck -w @assetforge/worker && npm run typecheck -w @assetforge/web",
-    "db:generate": "npm run db:generate -w @assetforge/db",
-    "db:migrate": "dotenv -e .env -- npm run db:migrate -w @assetforge/db",
-    "db:deploy": "dotenv -e .env -- npm run db:deploy -w @assetforge/db",
-    "db:studio": "dotenv -e .env -- npm run db:studio -w @assetforge/db"
+    "dev": "concurrently -n api,worker,web -c cyan,magenta,green \"npm run dev -w @assetforge/api\" \"npm run dev:worker -w @assetforge/api\" \"npm run dev -w @assetforge/web\"",
+    "build": "npm run build -w @assetforge/api && npm run build -w @assetforge/web",
+    "typecheck": "npm run typecheck -w @assetforge/api && npm run typecheck -w @assetforge/web"
   },
   "devDependencies": {
-    "concurrently": "latest",
-    "dotenv-cli": "^11.0.0",
+    "concurrently": "^10.0.5",
     "typescript": "latest"
   }
 }
