@@ -25,8 +25,7 @@ export type GenerationMetadataDocument = {
     failedAt?: Date;
   };
   rawResponse?: {
-    imageUrl?: string;
-    error?: string;
+    [key: string]: unknown;
   };
 };
 
@@ -83,10 +82,7 @@ const generationMetadataSchema = new Schema<GenerationMetadataDocument>(
       completedAt: Date,
       failedAt: Date,
     },
-    rawResponse: {
-      imageUrl: String,
-      error: String,
-    },
+    rawResponse: Schema.Types.Mixed,
   },
   {
     timestamps: true,

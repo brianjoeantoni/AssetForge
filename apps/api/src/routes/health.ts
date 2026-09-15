@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { config } from "../config.js";
 import { db } from "../db.js";
 import { prisma } from "../prisma.js";
 
@@ -8,6 +9,7 @@ healthRouter.get("/health", (_req, res) => {
   res.json({
     ok: true,
     service: "assetforge-api",
+    imageProvider: config.imageProvider,
   });
 });
 

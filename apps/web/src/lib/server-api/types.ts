@@ -1,6 +1,7 @@
 export type ApiHealth = {
   ok: boolean;
   service: string;
+  imageProvider: string;
 };
 
 export type ApiUser = {
@@ -43,10 +44,7 @@ export type ApiAssetMetadata = {
     completedAt?: string;
     failedAt?: string;
   };
-  rawResponse?: {
-    imageUrl?: string;
-    error?: string;
-  };
+  rawResponse?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 };
