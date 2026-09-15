@@ -24,6 +24,14 @@ function assetIsPending(asset: ApiAsset) {
   return status === "QUEUED" || status === "PROCESSING";
 }
 
+function formatProvider(provider: string | undefined) {
+  if (!provider) {
+    return "Unknown";
+  }
+
+  return provider.charAt(0).toUpperCase() + provider.slice(1);
+}
+
 function DashboardContent({ user }: { user: ApiUser }) {
   const queryClient = useQueryClient();
   const [prompt, setPrompt] = useState("");
@@ -129,7 +137,13 @@ function DashboardContent({ user }: { user: ApiUser }) {
           <CardContent className="flex items-center justify-between p-5">
             <div>
               <p className="text-sm text-muted-foreground">Mode</p>
-              <p className="mt-1 text-2xl font-semibold">Mock</p>
+              <div className="mt-1 text-2xl font-semibold">
+                {apiHealthQuery.isLoading ? (
+                  <Skeleton className="h-7 w-20" />
+                ) : (
+                  formatProvider(apiHealthQuery.data?.imageProvider)
+                )}
+              </div>
             </div>
             <WandSparkles className="h-5 w-5 text-muted-foreground" />
           </CardContent>

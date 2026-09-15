@@ -5,17 +5,30 @@ import {
   generationQueueName,
 } from "./queues/generation.js";
 import { prisma } from "./prisma.js";
-import { fakeImageUrl } from "./utils.js";
+import { getImageProvider } from "./providers/index.js";
 import { connectMongo, disconnectMongo } from "./mongo.js";
 import { GenerationMetadata } from "./models/generation-metadata.js";
 
-function wait(ms: number) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
 await connectMongo();
+const imageProvider = getImageProvider();
+
+function metadataFromError(error: Error) {
+  if ("provider" in error || "httpStatus" in error || "contentType" in error) {
+    return {
+      error: error.message,
+      provider: "provider" in error ? error.provider : undefined,
+      model: "model" in error ? error.model : undefined,
+      httpStatus: "httpStatus" in error ? error.httpStatus : undefined,
+      contentType: "contentType" in error ? error.contentType : undefined,
+      errors: "errors" in error ? error.errors : undefined,
+      messages: "messages" in error ? error.messages : undefined,
+    };
+  }
+
+  return {
+    error: error.message,
+  };
+}
 
 const worker = new Worker(
   generationQueueName, // queue name
@@ -49,22 +62,21 @@ const worker = new Worker(
       ownerId,
       prompt,
       status: "PROCESSING",
-      provider: "mock",
-      model: "WorkerMock-v1",
-      parameters: {
-        width: 960,
-        height: 540,
-        style: "placeholder",
-      },
+      provider: imageProvider.provider,
+      model: imageProvider.model,
+      parameters: imageProvider.parameters,
       timings: {
         queuedAt: new Date(job.timestamp),
         processingStartedAt: new Date(),
       },
     });
 
-    await wait(3000); // Simulates slow image generation. Later, this is where a real AI image API call would go
-
-    const imageUrl = fakeImageUrl(name);
+    const generatedImage = await imageProvider.generate({
+      assetId,
+      ownerId,
+      prompt,
+      name,
+    });
 
     const completedResult = await prisma.assets.updateMany({
       where: {
@@ -73,8 +85,8 @@ const worker = new Worker(
       },
       data: {
         status: "COMPLETED",
-        image_url: imageUrl,
-        model: "WorkerMock-v1",
+        image_url: generatedImage.imageUrl,
+        model: generatedImage.model,
         updated_at: new Date(),
       },
     });
@@ -94,9 +106,11 @@ const worker = new Worker(
       {
         $set: {
           status: "COMPLETED",
-          model: "WorkerMock-v1",
+          provider: generatedImage.provider,
+          model: generatedImage.model,
+          parameters: generatedImage.parameters,
           "timings.completedAt": new Date(),
-          "rawResponse.imageUrl": imageUrl,
+          rawResponse: generatedImage.rawResponse,
         },
       },
     );
@@ -153,7 +167,7 @@ worker.on("failed", async (job, error) => {
       $set: {
         status: "FAILED",
         "timings.failedAt": new Date(),
-        "rawResponse.error": error.message,
+        rawResponse: metadataFromError(error),
       },
     },
   );

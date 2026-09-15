@@ -5,4 +5,11 @@ export const config = {
   redisUrl: process.env.REDIS_URL ?? "redis://localhost:6379",
   mongoUrl: process.env.MONGO_URL ?? "mongodb://localhost:27017/assetforge",
   authCookieName: "assetforge_token",
+
+  imageProvider: process.env.IMAGE_PROVIDER ?? "mock",
+  cloudflareAccountId: process.env.CLOUDFLARE_ACCOUNT_ID,
+  cloudflareApiToken: process.env.CLOUDFLARE_API_TOKEN,
+  cloudflareImageModel:
+    process.env.CLOUDFLARE_IMAGE_MODEL ??
+    "@cf/bytedance/stable-diffusion-xl-lightning",
 };
