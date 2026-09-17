@@ -135,7 +135,7 @@ authRouter.post("/login", async (req, res) => {
     res.cookie(config.authCookieName, token, {
       httpOnly: true,
       sameSite: "lax",
-      secure: false,
+      secure: config.isProduction,
       maxAge: 1000 * 60 * 60 * 24 * 7,
     });
 
@@ -187,7 +187,7 @@ authRouter.post("/logout", (_req, res) => {
   res.clearCookie(config.authCookieName, {
     httpOnly: true,
     sameSite: "lax",
-    secure: false,
+    secure: config.isProduction,
   });
 
   res.status(204).send();
