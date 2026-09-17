@@ -1,5 +1,8 @@
-import { Router } from "express";
-import { requireAuth } from "../middleware.js";
+import { Router, type Response } from "express";
+import {
+  requireAuth,
+  type AuthenticatedRequest,
+} from "../middleware.js";
 import { prisma } from "../prisma.js";
 import { isUuid } from "../utils.js";
 
@@ -7,24 +10,24 @@ export const usersRouter = Router();
 
 usersRouter.use(requireAuth);
 
-usersRouter.get("/", async (_req, res) => {
-  const users = await prisma.users.findMany({
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      created_at: true,
-    },
-    orderBy: {
-      created_at: "desc",
-    },
-  });
+function requireSelf(
+  req: AuthenticatedRequest,
+  id: string,
+  res: Response,
+) {
+  if (id !== req.userId) {
+    res.status(403).json({
+      error: "You can only access your own profile",
+    });
+    return false;
+  }
 
-  res.json(users);
-});
+  return true;
+}
 
 usersRouter.get("/:id", async (req, res) => {
   const { id } = req.params;
+  const authenticatedReq = req as unknown as AuthenticatedRequest;
 
   if (typeof id !== "string" || !isUuid(id)) {
     res.status(400).json({
@@ -33,11 +36,13 @@ usersRouter.get("/:id", async (req, res) => {
     return;
   }
 
+  if (!requireSelf(authenticatedReq, id, res)) {
+    return;
+  }
+
   try {
     const user = await prisma.users.findUnique({
-      where: {
-        id,
-      },
+      where: { id },
       select: {
         id: true,
         name: true,
@@ -61,65 +66,19 @@ usersRouter.get("/:id", async (req, res) => {
   }
 });
 
-usersRouter.post("/", async (req, res) => {
-  const { name, email } = req.body;
-
-  if (typeof name !== "string" || name.trim() === "") {
-    res.status(400).json({
-      error: "Name is required",
-    });
-    return;
-  }
-
-  if (typeof email !== "string" || email.trim() === "") {
-    res.status(400).json({
-      error: "Email is required",
-    });
-    return;
-  }
-
-  try {
-    const user = await prisma.users.create({
-      data: {
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        created_at: true,
-      },
-    });
-
-    res.status(201).json(user);
-  } catch (error) {
-    if (
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      error.code === "P2002"
-    ) {
-      res.status(409).json({
-        error: "Email is already registered",
-      });
-      return;
-    }
-
-    res.status(500).json({
-      error: "Failed to create user",
-    });
-  }
-});
-
 usersRouter.patch("/:id", async (req, res) => {
   const { id } = req.params;
   const { name, email } = req.body;
+  const authenticatedReq = req as unknown as AuthenticatedRequest;
 
   if (typeof id !== "string" || !isUuid(id)) {
     res.status(400).json({
       error: "Invalid user id",
     });
+    return;
+  }
+
+  if (!requireSelf(authenticatedReq, id, res)) {
     return;
   }
 
@@ -139,9 +98,7 @@ usersRouter.patch("/:id", async (req, res) => {
 
   try {
     const user = await prisma.users.update({
-      where: {
-        id,
-      },
+      where: { id },
       data: {
         name: name.trim(),
         email: email.trim().toLowerCase(),
@@ -188,6 +145,7 @@ usersRouter.patch("/:id", async (req, res) => {
 
 usersRouter.delete("/:id", async (req, res) => {
   const { id } = req.params;
+  const authenticatedReq = req as unknown as AuthenticatedRequest;
 
   if (typeof id !== "string" || !isUuid(id)) {
     res.status(400).json({
@@ -196,11 +154,13 @@ usersRouter.delete("/:id", async (req, res) => {
     return;
   }
 
+  if (!requireSelf(authenticatedReq, id, res)) {
+    return;
+  }
+
   try {
     await prisma.users.delete({
-      where: {
-        id,
-      },
+      where: { id },
     });
 
     res.status(204).send();
